@@ -4,7 +4,7 @@
 // unit-tested with plain node if the widget grows.
 
 // ---- Neovim snapshot (omarchy.json, written by oculus_omarchy) ----------------
-// { version, running, updated_at, pid, server, view, tracking, focus, events }
+// { version, running, updated_at, pid, server }
 function parseSnapshot(text, nowSec, staleAfterSec) {
   var state = { ok: false, live: false, server: "", pid: 0 }
   var data = decode(text)
@@ -19,27 +19,6 @@ function parseSnapshot(text, nowSec, staleAfterSec) {
   return state
 }
 
-// ---- New activity (activity.json, written by oculus-activity) -----------------
-// { version, fetched_at, authenticated, total_new, errors: [],
-//   projects: [{ key, provider, repository, name, new, latest_at,
-//                latest_title, latest_url, error }] }   sorted by `new` desc
-function parseActivity(text) {
-  var activity = { ok: false, fetchedAt: 0, authenticated: true, totalNew: 0, errors: [], projects: [] }
-  var data = decode(text)
-  if (!data || data.version !== 1) return activity
-
-  activity.ok = true
-  activity.fetchedAt = Number(data.fetched_at) || 0
-  activity.authenticated = data.authenticated !== false
-  activity.errors = data.errors instanceof Array ? data.errors : []
-  activity.projects = data.projects instanceof Array ? data.projects : []
-
-  var total = 0
-  for (var i = 0; i < activity.projects.length; i++) total += Number(activity.projects[i].new) || 0
-  activity.totalNew = total
-  return activity
-}
-
 function decode(text) {
   if (!text) return null
   try {
@@ -49,37 +28,138 @@ function decode(text) {
   }
 }
 
-// Projects with something new first; quiet projects fill the rest by recency.
-function topProjects(activity, limit) {
-  return activity.projects.slice(0, Math.max(0, limit))
+// ---- Forge URLs ----------------------------------------------------------------
+var HOSTS = { "github.com": "github", "www.github.com": "github", "codeberg.org": "codeberg" }
+
+// First path segments that are forge pages, not users.
+var RESERVED = {
+  github: ["about", "apps", "codespaces", "collections", "contact", "dashboard", "enterprise",
+    "events", "explore", "features", "issues", "login", "logout", "marketplace", "new",
+    "notifications", "organizations", "pricing", "pulls", "search", "security", "settings",
+    "signup", "sponsors", "stars", "topics", "trending"],
+  codeberg: ["admin", "api", "assets", "explore", "issues", "notifications", "pulls",
+    "repo", "user"],
 }
 
-// Forges return at most one 100-item page per category, so large counts are floors.
-function countLabel(n) {
-  n = Number(n) || 0
-  return n >= 100 ? "99+" : String(n)
+var NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/
+
+// https://github.com/owner/repo/pull/1 → { kind, provider, owner, repo, repository,
+// number | sha, url }. kind: project | user | pull_request | issue | commit.
+// Returns null for anything that isn't a GitHub/Codeberg user, repo or item.
+function parseUrl(text) {
+  var raw = String(text || "").trim().split(/\s/)[0]
+  var m = raw.match(/^(?:https?:\/\/)?([^\/?#]+)(\/[^?#]*)?/i)
+  if (!m) return null
+
+  var provider = HOSTS[m[1].toLowerCase()]
+  if (!provider) return null
+
+  var parts = (m[2] || "").split("/").filter(Boolean)
+  if (parts.length === 0) return null
+  if (parts[0] === "orgs" && parts.length >= 2) parts = [parts[1]]
+  if (RESERVED[provider].indexOf(parts[0].toLowerCase()) >= 0 || !NAME.test(parts[0])) return null
+
+  var host = provider === "codeberg" ? "https://codeberg.org/" : "https://github.com/"
+  var owner = parts[0]
+  if (parts.length === 1) return { kind: "user", provider: provider, owner: owner, url: host + owner }
+
+  var repo = parts[1].replace(/\.git$/, "")
+  if (!NAME.test(repo)) return null
+
+  var item = { kind: "project", provider: provider, owner: owner, repo: repo, repository: owner + "/" + repo }
+  var section = (parts[2] || "").toLowerCase()
+  var id = parts[3] || ""
+
+  if ((section === "pull" || section === "pulls") && /^\d+$/.test(id)) {
+    item.kind = "pull_request"
+    item.number = Number(id)
+  } else if (section === "issues" && /^\d+$/.test(id)) {
+    item.kind = "issue"
+    item.number = Number(id)
+  } else if (section === "commit" && /^[0-9a-f]{7,40}$/i.test(id)) {
+    item.kind = "commit"
+    item.sha = id.toLowerCase()
+  }
+
+  item.url = host + item.repository + (item.kind === "project" ? "" : "/" + parts[2] + "/" + id)
+  return item
 }
 
-function ago(epochSec, nowSec) {
-  if (!epochSec) return "never"
-  var s = Math.max(0, nowSec - epochSec)
-  if (s < 60) return "just now"
-  if (s < 3600) return Math.floor(s / 60) + "m ago"
-  if (s < 86400) return Math.floor(s / 3600) + "h ago"
-  return Math.floor(s / 86400) + "d ago"
+function projectKey(provider, repository) {
+  return (provider === "codeberg" ? "codeberg" : "github") + ":" + String(repository).toLowerCase()
 }
 
-function summary(activity, fetching, nowSec) {
-  if (fetching && !activity.ok) return "Checking tracked projects…"
-  if (!activity.ok) return "No activity fetched yet"
-  var head = activity.totalNew > 0 ? countLabel(activity.totalNew) + " new since last opened" : "Nothing new"
-  var tail = fetching ? "refreshing…" : "checked " + ago(activity.fetchedAt, nowSec)
-  return head + " · " + tail
+function userKey(provider, username) {
+  return (provider === "codeberg" ? "codeberg" : "github") + ":@" + String(username).toLowerCase()
 }
 
-function projectUrl(project) {
-  var host = project.provider === "codeberg" ? "https://codeberg.org/" : "https://github.com/"
-  return host + project.repository
+// Arguments for oculus-open / oculus-track.
+function projectTarget(item) { return item.provider + ":" + item.repository }
+function userTarget(item) { return item.provider + ":" + item.owner }
+
+function describe(item) {
+  if (!item) return ""
+  switch (item.kind) {
+    case "user": return "@" + item.owner
+    case "project": return item.repository
+    case "pull_request": return "Pull request · " + item.repository + "#" + item.number
+    case "issue": return "Issue · " + item.repository + "#" + item.number
+    case "commit": return "Commit · " + item.repository + "@" + item.sha.slice(0, 7)
+  }
+  return ""
+}
+
+// ---- Tracking file (~/.config/oculus/tracking.json) ---------------------------
+// { version: 1, projects: [tree], users: [tree] }; groups have `children`.
+function parseTracking(text) {
+  var tracking = { ok: false, projects: [], users: [], keys: {} }
+  var data = decode(text)
+  if (!data || data.version !== 1) return tracking
+
+  function flatten(nodes, output) {
+    if (!(nodes instanceof Array)) return
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i]
+      if (!node || typeof node !== "object") continue
+      if (node.children instanceof Array) flatten(node.children, output)
+      else output.push(node)
+    }
+  }
+
+  flatten(data.projects, tracking.projects)
+  flatten(data.users, tracking.users)
+  tracking.projects = tracking.projects.filter(function(p) { return typeof p.repository === "string" })
+  tracking.users = tracking.users.filter(function(u) { return typeof u.username === "string" })
+  tracking.projects.forEach(function(p) { tracking.keys[projectKey(p.provider, p.repository)] = true })
+  tracking.users.forEach(function(u) { tracking.keys[userKey(u.provider, u.username)] = true })
+  tracking.ok = true
+  return tracking
+}
+
+// What the panel offers for an item: [{ id, label, hint, done }]. `done`
+// rows are shown dimmed and do nothing (e.g. already tracked).
+function actionsFor(item, tracking) {
+  if (!item) return []
+  var actions = []
+  var repoTracked = item.repository && tracking.keys[projectKey(item.provider, item.repository)] === true
+
+  if (item.kind === "pull_request" || item.kind === "issue" || item.kind === "commit") {
+    actions.push({ id: "inspect", label: "Inspect in Oculus", hint: describe(item) })
+  }
+
+  if (item.kind === "user") {
+    var userTracked = tracking.keys[userKey(item.provider, item.owner)] === true
+    actions.push({ id: "user", label: "Open @" + item.owner + "'s activity", hint: item.provider })
+    actions.push({ id: "trackUser", label: userTracked ? "Tracking @" + item.owner : "Track @" + item.owner,
+      hint: "add to tracking file", done: userTracked })
+  } else {
+    actions.push({ id: "project", label: "Open " + item.repository + " activity", hint: item.provider })
+    actions.push({ id: "trackProject", label: repoTracked ? "Tracking " + item.repository : "Track " + item.repository,
+      hint: "add to tracking file", done: repoTracked })
+    actions.push({ id: "user", label: "Open @" + item.owner + "'s activity", hint: "owner" })
+  }
+
+  return actions
 }
 
 // Single-quote a value for a POSIX shell command line.

@@ -2,34 +2,28 @@
   "schemaVersion": 1,
   "id": "andrewgilley.oculus",
   "name": "Oculus",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Andrew Gilley",
   "license": "MIT",
-  "description": "Projects tracked by oculus.nvim with the most new activity since you last opened them, in the Omarchy bar.",
+  "description": "Inspect, open, or track the GitHub/Codeberg project, user, or item on your clipboard with oculus.nvim, from the Omarchy bar.",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "Panel.qml"
   },
   "barWidget": {
     "displayName": "Oculus",
-    "description": "New pushes and merged pull requests per tracked GitHub/Codeberg project, refreshed on a schedule.",
+    "description": "Copy a GitHub/Codeberg URL, open the panel: inspect PRs, issues and commits, open project or user feeds, add them to the oculus.nvim tracking file.",
     "category": "Development",
     "aliases": ["oculus", "neovim", "github", "codeberg"],
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "refreshIntervalSec": 900,
-      "refreshOnOpenAfterSec": 300,
-      "topProjects": 5,
-      "fetchCommand": "",
+      "trackingFile": "",
       "stateDir": "",
       "staleAfterSec": 60
     },
     "schema": [
-      { "key": "refreshIntervalSec", "type": "integer", "label": "Refresh interval (seconds)", "min": 300, "max": 21600, "step": 60, "defaultValue": 900, "description": "Each refresh costs ~2 API requests per project. Unauthenticated GitHub access is capped at once an hour regardless." },
-      { "key": "refreshOnOpenAfterSec", "type": "integer", "label": "Refresh when opened if older than (seconds)", "min": 60, "max": 3600, "step": 60, "defaultValue": 300 },
-      { "key": "topProjects", "type": "integer", "label": "Projects shown", "min": 1, "max": 20, "step": 1, "defaultValue": 5 },
-      { "key": "fetchCommand", "type": "path", "label": "Fetcher", "defaultValue": "", "description": "Optional. Defaults to ~/.local/bin/oculus-activity." },
+      { "key": "trackingFile", "type": "path", "label": "Tracking file", "defaultValue": "", "description": "Optional. Defaults to $XDG_CONFIG_HOME/oculus/tracking.json; must match oculus.nvim's tracking_file." },
       { "key": "stateDir", "type": "path", "label": "State folder", "defaultValue": "", "description": "Optional. Defaults to $XDG_STATE_HOME/oculus." },
       { "key": "staleAfterSec", "type": "integer", "label": "Treat Neovim as gone after (seconds)", "min": 10, "max": 3600, "step": 10, "defaultValue": 60 }
     ]

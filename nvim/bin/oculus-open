@@ -1,0 +1,46 @@
+#!/bin/bash
+# Open oculus.nvim on something, in the default terminal (Ghostty), on an empty
+# workspace on the current monitor.
+#
+# Usage:
+#   oculus-open inspect <https://github.com/owner/repo/{pull,issues,commit}/ID>
+#   oculus-open project <github:owner/repo | codeberg:owner/repo>
+#   oculus-open user    <github:login | codeberg:login>
+#   oculus-open oculus
+set -euo pipefail
+
+usage() {
+  sed -n '5,9p' "$0" | sed 's/^# //' >&2
+  exit 2
+}
+
+action="${1:-}"
+target="${2:-}"
+
+# The target is passed to Neovim as an Ex command argument, so allow identity
+# and URL-path characters only.
+case "$action" in
+  inspect)
+    [[ $target =~ ^https://(github\.com|codeberg\.org)/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/(pull|pulls|issues|commit)/[0-9A-Fa-f]+$ ]] || usage
+    command="OculusInspect $target"
+    ;;
+  project)
+    [[ $target =~ ^(github|codeberg):[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || usage
+    command="OculusOpen $target"
+    ;;
+  user)
+    [[ $target =~ ^(github|codeberg):[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || usage
+    command="OculusOpen @$target"
+    ;;
+  oculus)
+    command="OculusOpen"
+    ;;
+  *) usage ;;
+esac
+
+# Hyprland 0.56+ (Lua config): `dispatch` takes a Lua dispatcher expression.
+hyprctl dispatch 'hl.dsp.focus({ workspace = "emptym" })' >/dev/null
+
+# Use -c, not +cmd: Ghostty's -e drops arguments that start with "+" (it
+# reserves them for its own +actions).
+exec omarchy-launch-tui --app-id=org.omarchy.oculus nvim -c "$command"
