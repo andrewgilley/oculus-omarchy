@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "andrewgilley.oculus",
+  "name": "Oculus",
+  "version": "0.2.0",
+  "author": "Andrew Gilley",
+  "license": "MIT",
+  "description": "Projects tracked by oculus.nvim with the most new activity since you last opened them, in the Omarchy bar.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Oculus",
+    "description": "New pushes and merged pull requests per tracked GitHub/Codeberg project, refreshed on a schedule.",
+    "category": "Development",
+    "aliases": ["oculus", "neovim", "github", "codeberg"],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "refreshIntervalSec": 900,
+      "refreshOnOpenAfterSec": 300,
+      "topProjects": 5,
+      "fetchCommand": "",
+      "stateDir": "",
+      "staleAfterSec": 60
+    },
+    "schema": [
+      { "key": "refreshIntervalSec", "type": "integer", "label": "Refresh interval (seconds)", "min": 300, "max": 21600, "step": 60, "defaultValue": 900, "description": "Each refresh costs ~2 API requests per project. Unauthenticated GitHub access is capped at once an hour regardless." },
+      { "key": "refreshOnOpenAfterSec", "type": "integer", "label": "Refresh when opened if older than (seconds)", "min": 60, "max": 3600, "step": 60, "defaultValue": 300 },
+      { "key": "topProjects", "type": "integer", "label": "Projects shown", "min": 1, "max": 20, "step": 1, "defaultValue": 5 },
+      { "key": "fetchCommand", "type": "path", "label": "Fetcher", "defaultValue": "", "description": "Optional. Defaults to ~/.local/bin/oculus-activity." },
+      { "key": "stateDir", "type": "path", "label": "State folder", "defaultValue": "", "description": "Optional. Defaults to $XDG_STATE_HOME/oculus." },
+      { "key": "staleAfterSec", "type": "integer", "label": "Treat Neovim as gone after (seconds)", "min": 10, "max": 3600, "step": 10, "defaultValue": 60 }
+    ]
+  }
+}
