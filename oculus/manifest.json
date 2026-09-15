@@ -5,14 +5,14 @@
   "version": "0.3.0",
   "author": "Andrew Gilley",
   "license": "MIT",
-  "description": "Inspect, open, or track the GitHub/Codeberg project, user, or item on your clipboard with oculus.nvim, from the Omarchy bar.",
+  "description": "Recognises the GitHub/Codeberg project or user on your clipboard, shows whether oculus.nvim already tracks it, and tracks, opens or inspects it from the Omarchy bar.",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "Panel.qml"
   },
   "barWidget": {
     "displayName": "Oculus",
-    "description": "Copy a GitHub/Codeberg URL, open the panel: inspect PRs, issues and commits, open project or user feeds, add them to the oculus.nvim tracking file.",
+    "description": "Copy a GitHub/Codeberg URL, open the panel: it says whether you already track that project or user, and offers to track them, open their feeds, or inspect a PR, issue or commit.",
     "category": "Development",
     "aliases": ["oculus", "neovim", "github", "codeberg"],
     "allowMultiple": false,

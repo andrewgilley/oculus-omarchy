@@ -136,30 +136,67 @@ function parseTracking(text) {
   return tracking
 }
 
-// What the panel offers for an item: [{ id, label, hint, done }]. `done`
-// rows are shown dimmed and do nothing (e.g. already tracked).
+// Is the thing the page is about already in the tracking file? For a repo page
+// (and any item under it) that's the project; for a user page, the user.
+function isTracked(item, tracking) {
+  if (!item) return false
+  return item.kind === "user"
+    ? tracking.keys[userKey(item.provider, item.owner)] === true
+    : tracking.keys[projectKey(item.provider, item.repository)] === true
+}
+
+// Short at-a-glance state for the panel hero.
+function trackedLabel(item, tracking) {
+  if (!item) return ""
+  if (!tracking.ok) return "No tracking file"
+  return isTracked(item, tracking) ? "Tracked" : "Not tracked"
+}
+
+// What the panel offers for an item: [{ id, label, hint, key, done }]. Tracking
+// leads, because recognising a trackable page is the point of the widget: every
+// repo page offers the project *and* its owner, and rows for things already in
+// the tracking file are dimmed, badged and do nothing. `key` is the digit that
+// runs the row; `done` rows have none, so the numbering stays 1..n over the
+// rows you can actually press.
 function actionsFor(item, tracking) {
   if (!item) return []
   var actions = []
-  var repoTracked = item.repository && tracking.keys[projectKey(item.provider, item.repository)] === true
+  var trackedRepo = item.repository && tracking.keys[projectKey(item.provider, item.repository)] === true
+  var trackedUser = tracking.keys[userKey(item.provider, item.owner)] === true
+  var owner = "@" + item.owner
 
   if (item.kind === "pull_request" || item.kind === "issue" || item.kind === "commit") {
     actions.push({ id: "inspect", label: "Inspect in Oculus", hint: describe(item) })
   }
 
-  if (item.kind === "user") {
-    var userTracked = tracking.keys[userKey(item.provider, item.owner)] === true
-    actions.push({ id: "user", label: "Open @" + item.owner + "'s activity", hint: item.provider })
-    actions.push({ id: "trackUser", label: userTracked ? "Tracking @" + item.owner : "Track @" + item.owner,
-      hint: "add to tracking file", done: userTracked })
-  } else {
-    actions.push({ id: "project", label: "Open " + item.repository + " activity", hint: item.provider })
-    actions.push({ id: "trackProject", label: repoTracked ? "Tracking " + item.repository : "Track " + item.repository,
-      hint: "add to tracking file", done: repoTracked })
-    actions.push({ id: "user", label: "Open @" + item.owner + "'s activity", hint: "owner" })
+  if (item.kind !== "user") {
+    actions.push(trackedRepo
+      ? { id: "trackProject", label: "Tracking " + item.repository, hint: "already in your tracking file", done: true }
+      : { id: "trackProject", label: "Track " + item.repository, hint: "add this project to oculus.nvim" })
+    actions.push({ id: "project", label: "Open " + item.repository + " activity", hint: "in Oculus" })
   }
 
+  actions.push(trackedUser
+    ? { id: "trackUser", label: "Tracking " + owner,
+        hint: item.kind === "user" ? "already in your tracking file" : "the owner is already tracked", done: true }
+    : { id: "trackUser", label: "Track " + owner,
+        hint: item.kind === "user" ? "add this user to oculus.nvim" : "add the owner to oculus.nvim" })
+  actions.push({ id: "user", label: "Open " + owner + "'s activity", hint: "in Oculus" })
+
+  var digit = 0
+  for (var i = 0; i < actions.length; i++) actions[i].key = actions[i].done ? "" : String(++digit)
   return actions
+}
+
+// The action a bare Enter runs: the first one that isn't already done.
+function primaryAction(actions) {
+  for (var i = 0; i < actions.length; i++) if (!actions[i].done) return actions[i]
+  return null
+}
+
+function actionForKey(actions, key) {
+  for (var i = 0; i < actions.length; i++) if (actions[i].key === key) return actions[i]
+  return null
 }
 
 // Single-quote a value for a POSIX shell command line.

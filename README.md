@@ -1,15 +1,16 @@
 # oculus-omarchy
 
 Omarchy shell plugin that takes the GitHub or Codeberg page you're looking at
-into [oculus.nvim](https://github.com/andrewgilley/oculus.nvim): inspect a pull
-request, issue or commit, open a project's or user's activity feed, or add the
-project or user to your tracking file.
+into [oculus.nvim](https://github.com/andrewgilley/oculus.nvim): it recognises
+the project or user the page is about, tells you whether Oculus already tracks
+it, and offers to track it, open its activity feed, or inspect a pull request,
+issue or commit.
 
 ```
 oculus-omarchy/
 ├── oculus/                          # Omarchy plugin (id: andrewgilley.oculus)
 │   ├── manifest.json                # bar-widget manifest + settings schema
-│   ├── Panel.qml                    # bar icon, popout with item actions + tracked list
+│   ├── Panel.qml                    # bar icon, popout with the current page's actions
 │   └── Model.js                     # URL parsing, tracking file, action list
 ├── nvim/
 │   ├── bin/oculus-open              # new Ghostty + Neovim running an Oculus command
@@ -45,21 +46,28 @@ When the panel opens it reads the clipboard and recognises:
 
 | URL                                         | Actions                                            |
 |---------------------------------------------|----------------------------------------------------|
-| `github.com/owner/repo` (any page under it) | open the project's activity · track it · open the owner's activity |
+| `github.com/owner/repo` (any page under it) | **track the project** · open its activity · **track the owner** · open the owner's activity |
 | `github.com/owner/repo/pull/N`, `/issues/N`, `/commit/SHA` | **inspect** in Oculus, plus everything above |
-| `github.com/login`, `github.com/orgs/login` | open the user's activity · track them              |
+| `github.com/login`, `github.com/orgs/login` | **track the user** · open their activity           |
 
 Codeberg URLs work the same (`codeberg.org/owner/repo/pulls/N`). Forge pages
-like `github.com/settings` are ignored.
+like `github.com/settings`, and anything that isn't a forge URL, are ignored —
+the panel says so instead of offering actions.
 
+- **Already tracking it?** The hero carries a *Tracked* / *Not tracked* pill
+  for the thing the page is about, and any row whose target is already in the
+  tracking file reads *Tracking …*, is dimmed, and carries a ✓ instead of a
+  number. The number keys only ever count the rows you can actually press, so
+  `1`–`n` stay in step as things become tracked.
+- Every repo page offers its **owner** as well as the project, so you can pick
+  up a user you follow from any page of one of their repos.
 - **Tracking** goes through oculus.nvim's own `oculus.tracking` module (the
   same validation and atomic write the Oculus UI uses). New entries go at the
   root of the Projects or Users list, and you can move them into groups in
-  Oculus. Rows for things you already track show as *Tracking …* and are
-  dimmed. It works with no Neovim open. If a Neovim running the bridge is up,
+  Oculus. It works with no Neovim open. If a Neovim running the bridge is up,
   it's told to reload the tracking file over RPC.
-- **Tracked projects and users** from the tracking file are listed below the
-  actions. Click one to open its feed.
+- The panel only ever talks about the page you're on. Browse the things you
+  already track in Oculus itself (`o`, or middle-click the bar icon).
 - Inspect and open start a new Ghostty + Neovim on an empty workspace
   (`oculus-open`). "Open Oculus" (`o`, middle click) uses your running Neovim
   when the bridge reports one.
@@ -129,6 +137,7 @@ Point lazy.nvim at your clone instead, and run `./install.sh` from it:
 | Chromium   | `Alt+Shift+L` copies the current URL (Omarchy's Copy URL extension) |
 | Bar        | left: popout · middle: `:OculusOpen`                            |
 | Panel keys | `1`–`n` run an action · Enter runs the first · `p` re-read the clipboard · `o` open Oculus |
+| Tracked    | dimmed row, ✓ instead of a number — it's already in the tracking file |
 | IPC        | `omarchy-shell andrewgilley.oculus item <url>` opens the panel on a URL; also `toggle`, `status` |
 | CLI        | `oculus-open inspect <url>` · `oculus-open project github:owner/repo` · `oculus-open user github:login` · `oculus-track github owner/repo` · `oculus-track codeberg login` |
 
@@ -165,6 +174,7 @@ o.bind("SUPER + ALT + O", "Oculus: act on copied URL",
 - Read the URL straight from the focused browser tab instead of the
   clipboard (Chromium doesn't expose it without a native-messaging host).
 - Choose a group when tracking, instead of the list root.
+- Untrack from the panel, not just track.
 - Send inspect/open to the running Neovim and focus its terminal, instead of
   starting a new one.
 - Arrow-key cursor over the panel rows.

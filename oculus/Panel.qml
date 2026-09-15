@@ -10,9 +10,11 @@ import "Model.js" as Model
 // Oculus bar widget + popout: act on the GitHub/Codeberg page you're looking at.
 //
 // Copy a project, user, pull request, issue or commit URL (Omarchy's Chromium
-// copies the current URL with Alt+Shift+L) and open the panel: it offers to
-// inspect the item, open its activity feed in oculus.nvim, or add it to the
-// tracking file. Below that, tracked projects and users to jump into.
+// copies the current URL with Alt+Shift+L) and open the panel: it recognises
+// the page, says whether oculus.nvim already tracks it, and offers to track the
+// project and its owner, open their activity feeds, or inspect the item. The
+// panel only ever talks about the page you're on — browse the things you
+// already track in Oculus itself.
 //
 //   oculus-open  <inspect|project|user|oculus> [target]   new Ghostty + Neovim
 //   oculus-track <github|codeberg> <owner/repo|login>    edits tracking.json
@@ -39,6 +41,10 @@ Panel {
   readonly property var tracking: Model.parseTracking(trackingText)
   readonly property var item: Model.parseUrl(pinnedText || clipboardText)
   readonly property var actions: Model.actionsFor(item, tracking)
+  // "Tracked" / "Not tracked" for the hero pill; "" when there's nothing to act on.
+  readonly property string trackedLabel: Model.trackedLabel(item, tracking)
+  // A URL is on the clipboard but it isn't a forge page we can do anything with.
+  readonly property bool unusable: item === null && (pinnedText || clipboardText).trim() !== ""
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color dim: Qt.darker(foreground, 1.55)
@@ -168,6 +174,12 @@ Panel {
   // The plugin mark (assets/omarchy-plugin-icon.svg): nested squares, drawn as
   // a shape rather than a glyph so it takes the bar or panel foreground colour
   // at any size without needing an icon font.
+  //
+  // The shape is centred rather than filling the item: BarIconButton loads the
+  // icon with anchors.fill into its icon canvas (Style.bar.iconCanvas), so the
+  // item is the canvas's size, not `size`. Drawing the scaled path from the
+  // item's top-left would hang the mark off-centre from the button — and from
+  // the active underline, which is centred on the whole slot.
   component OculusMark: Item {
     id: mark
     property real size: Style.font.icon
@@ -177,7 +189,9 @@ Panel {
     implicitHeight: size
 
     Shape {
-      anchors.fill: parent
+      anchors.centerIn: parent
+      width: mark.size
+      height: mark.size
       preferredRendererType: Shape.CurveRenderer
       ShapePath {
         fillColor: mark.color
@@ -251,14 +265,6 @@ Panel {
     }
   }
 
-  component Heading: Text {
-    width: parent ? parent.width : 0
-    topPadding: Style.space(4)
-    color: root.dim
-    font.family: root.fontFamily
-    font.pixelSize: Style.font.body * 0.8
-  }
-
   KeyboardPanel {
     id: panel
     anchorItem: button
@@ -274,10 +280,10 @@ Panel {
       anchors.fill: parent
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
-      onActivateRequested: root.run(root.actions.filter(function(a) { return !a.done })[0])
+      onActivateRequested: root.run(Model.primaryAction(root.actions))
       onTextKey: function(t) {
-        var n = parseInt(t, 10)
-        if (n >= 1 && n <= root.actions.length) root.run(root.actions[n - 1])
+        var action = Model.actionForKey(root.actions, t)
+        if (action) root.run(action)
         else if (t === "o" || t === "O") root.openOculus()
         else if (t === "p" || t === "P") { root.pinnedText = ""; root.readClipboard() }
       }
@@ -299,7 +305,10 @@ Panel {
           PanelHero {
             width: parent.width
             title: root.item ? Model.describe(root.item) : "Oculus"
-            meta: root.item ? root.item.url : "Copy a GitHub or Codeberg URL (Alt+Shift+L in Chromium), then press p"
+            detail: root.trackedLabel
+            meta: root.item ? root.item.url
+              : root.unusable ? "Not a GitHub or Codeberg project or user page"
+              : "Copy a GitHub or Codeberg URL (Alt+Shift+L in Chromium), then press p"
             foreground: root.foreground
             fontFamily: root.fontFamily
             iconOpacity: root.item ? 1.0 : 0.5
@@ -315,10 +324,9 @@ Panel {
             model: root.actions
             delegate: ActionRow {
               required property var modelData
-              required property int index
               label: modelData.label
               hint: modelData.hint || ""
-              badge: String(index + 1)
+              badge: modelData.done === true ? "\u2713" : modelData.key
               dimmed: modelData.done === true || (tracker.running && modelData.id.indexOf("track") === 0)
               onActivated: root.run(modelData)
             }
@@ -335,45 +343,15 @@ Panel {
               : "No tracking file at " + root.trackingPath + ". Create it with {\"version\": 1, \"projects\": [], \"users\": []} to track from here."
           }
 
-          Heading {
-            visible: root.tracking.projects.length > 0
-            text: "Tracked projects"
-          }
-
-          Repeater {
-            model: root.tracking.projects
-            delegate: ActionRow {
-              required property var modelData
-              label: modelData.name || modelData.repository
-              hint: modelData.name && modelData.name !== modelData.repository ? modelData.repository : ""
-              badge: modelData.provider === "codeberg" ? "cb" : ""
-              onActivated: root.launch("project", (modelData.provider || "github") + ":" + modelData.repository)
-            }
-          }
-
-          Heading {
-            visible: root.tracking.users.length > 0
-            text: "Tracked users"
-          }
-
-          Repeater {
-            model: root.tracking.users
-            delegate: ActionRow {
-              required property var modelData
-              label: "@" + modelData.username
-              hint: modelData.name && modelData.name !== modelData.username ? modelData.name : ""
-              badge: modelData.provider === "codeberg" ? "cb" : ""
-              onActivated: root.launch("user", (modelData.provider || "github") + ":" + modelData.username)
-            }
-          }
-
           Text {
             width: parent.width
             topPadding: Style.space(4)
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.body * 0.8
-            text: (root.actions.length > 0 ? "1–" + root.actions.length + " act · " : "") + "p re-read clipboard · o open Oculus"
+            readonly property int keyed: root.actions.filter(function(a) { return a.key !== "" }).length
+            text: (keyed > 1 ? "1–" + keyed + " act · " : keyed === 1 ? "1 act · " : "")
+              + "p re-read clipboard · o open Oculus"
           }
         }
       }
