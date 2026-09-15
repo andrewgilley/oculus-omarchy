@@ -1,4 +1,4 @@
-# oculus × omarchy
+# oculus-omarchy
 
 Omarchy shell plugin that shows the [oculus.nvim](../lua/oculus.nvim)
 projects with the most new activity since you last opened them.
