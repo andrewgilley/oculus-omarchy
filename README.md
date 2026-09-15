@@ -47,26 +47,63 @@ Neovim RPC socket ◀── nvim --server … --remote-send ──────�
   `CODEBERG_TOKEN` if it's set.
 - Counts are floors past one page (shown as `99+`).
 
+## Requirements
+
+- [Omarchy](https://omarchy.org) with its Quickshell-based shell, on
+  Hyprland 0.56 or newer (the launcher uses its Lua `hyprctl dispatch` syntax).
+- [oculus.nvim](https://github.com/andrewgilley/oculus.nvim) installed with
+  lazy.nvim. The fetcher reads your tracked projects from
+  `~/.config/oculus/tracking.json`, falling back to oculus's own state file.
+- Ghostty as your default terminal (Omarchy's default), used for
+  "open project".
+- Recommended: `gh auth login` or `GITHUB_TOKEN`, so refreshes can run every
+  15 minutes instead of hourly.
+
 ## Setup
 
-1. Put the bridge on Neovim's runtime path, for example with lazy.nvim:
+1. Add the plugin to lazy.nvim. The Neovim side lives in the repo's `nvim/`
+   folder, so the spec adds that folder to the runtime path:
 
    ```lua
    {
-     dir = "~/Dev/oculus-omarchy/nvim",
-     name = "oculus-omarchy",
+     "andrewgilley/oculus-omarchy",
      dependencies = { "andrewgilley/oculus.nvim" },
-     config = function() require("oculus_omarchy").setup() end,
+     config = function(plugin)
+       vim.opt.rtp:append(plugin.dir .. "/nvim")
+       require("oculus_omarchy").setup()
+     end,
    }
    ```
 
-2. `./install.sh`: validates and copies the plugin to
+2. Restart Neovim so lazy.nvim clones the repo, then install the bar widget
+   and the two scripts from that clone:
+
+   ```bash
+   ~/.local/share/nvim/lazy/oculus-omarchy/install.sh
+   ```
+
+   This validates the plugin, copies it to
    `~/.config/omarchy/plugins/andrewgilley.oculus/`, and links
-   `~/.local/bin/oculus-activity`.
+   `oculus-activity` and `oculus-open-project` into `~/.local/bin`.
 3. `omarchy bar put andrewgilley.oculus`.
+
+After a lazy.nvim update, run `install.sh` again to pick up widget changes.
 
 The fetcher finds oculus.nvim at `~/.local/share/nvim/lazy/oculus.nvim`;
 override with `OCULUS_NVIM_PATH`.
+
+### Working on a local checkout
+
+Point lazy.nvim at your clone instead, and run `./install.sh` from it:
+
+```lua
+{
+  dir = "~/Dev/oculus-omarchy/nvim",
+  name = "oculus-omarchy",
+  dependencies = { "andrewgilley/oculus.nvim" },
+  config = function() require("oculus_omarchy").setup() end,
+}
+```
 
 ## Using it
 
