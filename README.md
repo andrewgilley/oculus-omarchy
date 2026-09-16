@@ -146,7 +146,7 @@ starting query: `omarchy-shell shell summon andrewgilley.oculus '{"query": "zig"
 | Where      | Action                                                          |
 |------------|-----------------------------------------------------------------|
 | Bar        | left: popout on the current page · middle: `:OculusOpen` · right: overlay |
-| Panel keys | `1`–`n` run an action · Enter runs the first · `/` overlay · `o` open Oculus |
+| Panel keys | `1`–`n` run an action · Enter runs the first · `/` overlay · `o` open Oculus · `q` or Esc close |
 | Overlay keys | type to search · ↑↓ select · Enter runs the first action · Tab into the actions · Alt+Enter open in browser · Del untrack · Ctrl+V paste · Esc clear, back, close |
 | Tracked    | dimmed row, ✓ instead of a number — it's already in the tracking file |
 | IPC        | `omarchy-shell andrewgilley.oculus toggle` opens the panel on the current page; `item <url>` on any URL; `status` · `omarchy-shell shell toggle andrewgilley.oculus '{}'` the overlay |

@@ -365,6 +365,7 @@ Panel {
         if (action) root.run(action)
         else if (t === "o" || t === "O") root.openOculus()
         else if (t === "/" || t === "s" || t === "S") root.browseTracked()
+        else if (t === "q" || t === "Q") root.close()
       }
 
       Flickable {
@@ -476,7 +477,7 @@ Panel {
             readonly property int keyed: root.actions.filter(function(a) { return a.key !== "" }).length
             text: root.pick ? "↑↓ select · ↵ choose · Esc back"
               : (keyed > 1 ? "1–" + keyed + " act · " : keyed === 1 ? "1 act · " : "")
-              + "/ search tracked · o open Oculus"
+              + "/ search tracked · o open Oculus · q quit"
           }
         }
       }
