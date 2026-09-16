@@ -14,8 +14,9 @@ import "Model.js" as Model
 //
 // The list is on the left and the selected row's actions on the right: Enter
 // runs the first one, Tab moves into the actions. Tracking and moving go
-// through a group picker in the same card; untracking asks first. Edits go
-// through oculus-track, so they are validated by oculus.nvim itself.
+// through a group picker in the same card, and tracking then asks for a display
+// name; untracking asks first. Edits go through oculus-track, so they are
+// validated by oculus.nvim itself.
 Item {
   id: root
 
@@ -44,9 +45,11 @@ Item {
   property bool opened: false
   property string filterText: ""
   property int selectedIndex: 0
-  // "browse": tracked entries and pages; "group": choosing where to put one.
+  // "browse": tracked entries and pages; "group": choosing where to put one;
+  // "name": naming a new one.
   property string mode: "browse"
-  // What the group picker is for: { op: add | move, list, provider, identity, label, group }.
+  // What the group and name pickers are for: { op: add | move, list, provider,
+  // identity, label, group, path }. `path` is the group chosen for an add.
   property var groupTarget: null
   property string browseFilter: ""
   // Tab moves the cursor into the selected row's actions.
@@ -59,6 +62,7 @@ Item {
 
   readonly property var rows: mode === "group" && groupTarget
     ? Model.groupRows(tracking, groupTarget.list, filterText, groupTarget.group || null)
+    : mode === "name" && groupTarget ? Model.nameRows(groupTarget, filterText)
     : Model.paletteRows(tracking, pageItem, filterText)
   readonly property var selectedRow: rows.length > 0 ? rows[Math.max(0, Math.min(selectedIndex, rows.length - 1))] : null
   readonly property var actions: mode === "browse" ? Model.rowActions(selectedRow, tracking) : []
@@ -201,10 +205,27 @@ Item {
   function chooseGroup(row) {
     var target = root.groupTarget
     if (!row || !target) return
-    var flag = target.op === "move" ? "--move" : "--group"
+    if (target.op === "add") {
+      root.groupTarget = Object.assign({}, target, { path: row.path })
+      root.mode = "name"
+      root.setFilter("")
+      return
+    }
     root.leaveGroupPicker()
-    root.track([flag, JSON.stringify(row.path), target.provider, target.identity],
-      (target.op === "move" ? "Moving " : "Tracking ") + target.label + "…")
+    root.track(["--move", JSON.stringify(row.path), target.provider, target.identity], "Moving " + target.label + "…")
+  }
+
+  function chooseName(row) {
+    var target = root.groupTarget
+    if (!row || !target) return
+    var args = ["--group", JSON.stringify(target.path)].concat(row.name ? ["--name", row.name] : [])
+    root.leaveGroupPicker()
+    root.track(args.concat([target.provider, target.identity]), "Tracking " + target.label + "…")
+  }
+
+  function backToGroups() {
+    root.mode = "group"
+    root.setFilter("")
   }
 
   function requestUntrack(row) {
@@ -241,6 +262,7 @@ Item {
     if (event.key === Qt.Key_Escape) {
       if (root.inActions) root.inActions = false
       else if (root.filterText) root.setFilter("")
+      else if (root.mode === "name") root.backToGroups()
       else if (root.mode === "group") root.leaveGroupPicker()
       else root.dismiss()
     } else if (Util.editsFilter(event, root.filterText)) {
@@ -266,6 +288,7 @@ Item {
       root.selectAbsolute(root.rows.length - 1)
     } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
       if (root.mode === "group") root.chooseGroup(root.selectedRow)
+      else if (root.mode === "name") root.chooseName(root.selectedRow)
       else if (alt && root.selectedRow) root.run({ id: "browser" })
       else if (root.inActions) root.run(root.actions[root.actionIndex])
       else root.run(root.primaryAction())
@@ -422,6 +445,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: root.filterText || (root.mode === "group"
               ? "Choose a group, or type a name for a new one…"
+              : root.mode === "name" ? "Type a display name, or ↵ to leave it unnamed…"
               : "Search tracked projects and users, or paste a URL…")
             color: root.foreground
             opacity: root.filterText ? 1 : 0.58
@@ -533,6 +557,7 @@ Item {
                     onClicked: {
                       root.selectedIndex = entry.index
                       if (root.mode === "group") root.chooseGroup(entry.modelData)
+                      else if (root.mode === "name") root.chooseName(entry.modelData)
                       else root.run(root.primaryAction())
                     }
                   }
@@ -581,7 +606,7 @@ Item {
               anchors.fill: parent
               anchors.leftMargin: root.contentMargin
               spacing: Style.space(6)
-              visible: root.mode === "group" && root.groupTarget !== null
+              visible: root.mode !== "browse" && root.groupTarget !== null
 
               Text {
                 textFormat: Text.PlainText
@@ -597,9 +622,13 @@ Item {
                 textFormat: Text.PlainText
                 width: parent.width
                 wrapMode: Text.WordWrap
-                text: (root.groupTarget && root.groupTarget.op === "move"
-                  ? "Now in " + Model.groupLabel(root.groupTarget.group) + ". "
-                  : "") + "Pick a group, or type a name to create a new one at the top level."
+                text: !root.groupTarget ? ""
+                  : root.mode === "name"
+                  ? "Into " + Model.groupLabel(root.groupTarget.path) + ". Type the name Oculus shows for it, or leave it empty to show "
+                    + root.groupTarget.label + "."
+                  : (root.groupTarget.op === "move" ? "Now in " + Model.groupLabel(root.groupTarget.group) + ". " : "")
+                    + "Pick a group, or type a name to create a new one at the top level."
+                    + (root.groupTarget.op === "add" ? " You can name it next." : "")
                 color: root.foreground
                 opacity: 0.58
                 font.family: root.fontFamily
@@ -742,8 +771,8 @@ Item {
             id: hints
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            text: root.mode === "group"
-              ? "↵ choose · Esc back"
+            text: root.mode === "group" ? "↵ choose · Esc back"
+              : root.mode === "name" ? "↵ track · Esc back to groups"
               : "↵ run · Tab actions · Alt+↵ open in browser · Del untrack · Ctrl+V paste · Esc close"
             color: root.foreground
             opacity: 0.5

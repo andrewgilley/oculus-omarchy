@@ -173,15 +173,16 @@ local function edit(provider, identity, file, fn)
 end
 
 -- provider: "github" | "codeberg"; identity: "owner/repo" or "login";
--- group: path of group names ({} or nil for the list root).
-function M.add(provider, identity, file, group)
+-- group: path of group names ({} or nil for the list root); name: the display
+-- name Oculus shows (nil leaves it unset, so Oculus falls back to the identity).
+function M.add(provider, identity, file, group, name)
   return edit(provider, identity, file, function(nodes, field, label)
     if contains(nodes, provider, field, identity) then
       return true, "already tracking " .. label
     end
 
-    table.insert(group_children(nodes, group or {}), { [field] = identity, provider = provider })
-    return true, "tracking " .. label
+    table.insert(group_children(nodes, group or {}), { [field] = identity, provider = provider, name = name })
+    return true, "tracking " .. label .. (name and name ~= identity and (" as " .. name) or "")
   end)
 end
 

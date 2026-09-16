@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls as QQC
 import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
@@ -18,7 +18,9 @@ import "Model.js" as Model
 // you already track in Oculus itself.
 //
 //   oculus-open  <inspect|project|user|oculus> [target]   new Ghostty + Neovim
-//   oculus-track <github|codeberg> <owner/repo|login>    edits tracking.json
+//   oculus-track [--group G] [--name N] <github|codeberg> <owner/repo|login>
+//
+// Tracking asks, in the panel, which group to put the entry in and what to call it.
 Panel {
   id: root
   moduleName: "andrewgilley.oculus"
@@ -39,6 +41,14 @@ Panel {
   // Set by the `item` IPC call; wins over the browser page until the panel closes.
   property string pinnedText: ""
   property string lastError: ""
+  // Set while a Track row asks where the entry goes and what to call it:
+  // { list, provider, identity, label, step: group | name, path }.
+  property var pick: null
+  property string pickText: ""
+  property int pickIndex: 0
+  readonly property var pickRows: !pick ? []
+    : pick.step === "group" ? Model.groupRows(tracking, pick.list, pickText, null)
+    : Model.nameRows(pick, pickText)
 
   readonly property var nvim: Model.parseSnapshot(snapshotText, Math.floor(Date.now() / 1000), staleAfterSec)
   readonly property var tracking: Model.parseTracking(trackingText)
@@ -64,11 +74,52 @@ Panel {
     close()
   }
 
-  function track(provider, identity) {
+  function startPick(list, identity, label) {
     if (tracker.running) return
     lastError = ""
-    tracker.command = [binDir + "/oculus-track", "--file", trackingPath, provider, identity]
+    pick = { list: list, provider: item.provider, identity: identity, label: label, step: "group", path: [] }
+    pickField.text = ""
+    pickIndex = 0
+    Qt.callLater(function() { pickField.forceActiveFocus() })
+  }
+
+  function endPick() {
+    pick = null
+    pickField.text = ""
+    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+  }
+
+  // Esc clears what's typed, then steps back from the name to the group, then out.
+  function backPick() {
+    if (pickField.text !== "") pickField.text = ""
+    else if (pick.step === "name") { pick = Object.assign({}, pick, { step: "group" }); pickIndex = 0 }
+    else endPick()
+  }
+
+  function movePick(delta) {
+    pickIndex = Math.max(0, Math.min(pickIndex + delta, pickRows.length - 1))
+  }
+
+  function choosePick(row) {
+    if (!pick || !row) return
+    if (pick.step === "group") {
+      pick = Object.assign({}, pick, { step: "name", path: row.path })
+      pickField.text = ""
+      pickIndex = 0
+      return
+    }
+    var target = pick
+    endPick()
+    tracker.command = [binDir + "/oculus-track", "--file", trackingPath, "--group", JSON.stringify(target.path)]
+      .concat(row.name ? ["--name", row.name] : [], [target.provider, target.identity])
     tracker.running = true
+  }
+
+  // Keep the cursor row on screen when the group list scrolls.
+  function reveal(row) {
+    var y = row.mapToItem(column, 0, 0).y
+    if (y < flick.contentY) flick.contentY = y
+    else if (y + row.height > flick.contentY + flick.height) flick.contentY = y + row.height - flick.height
   }
 
   function run(action) {
@@ -77,8 +128,8 @@ Panel {
       case "inspect": launch("inspect", item.url); break
       case "project": launch("project", Model.projectTarget(item)); break
       case "user": launch("user", Model.userTarget(item)); break
-      case "trackProject": track(item.provider, item.repository); break
-      case "trackUser": track(item.provider, item.owner); break
+      case "trackProject": startPick("projects", item.repository, item.repository); break
+      case "trackUser": startPick("users", item.owner, "@" + item.owner); break
     }
   }
 
@@ -116,6 +167,7 @@ Panel {
       checkBrowser()
       Qt.callLater(function() { keyCatcher.forceActiveFocus() })
     } else {
+      if (pick) endPick()
       pinnedText = ""
       lastError = ""
     }
@@ -236,6 +288,7 @@ Panel {
     property string hint: ""
     property string badge: ""
     property bool dimmed: false
+    property bool highlighted: false
     signal activated()
 
     width: parent ? parent.width : 0
@@ -244,7 +297,7 @@ Panel {
     Rectangle {
       anchors.fill: parent
       radius: Style.space(4)
-      color: mouse.containsMouse && !row.dimmed ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.08) : "transparent"
+      color: (mouse.containsMouse || row.highlighted) && !row.dimmed ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.08) : "transparent"
     }
 
     Text {
@@ -303,6 +356,7 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      blocked: root.pick !== null
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onActivateRequested: root.run(Model.primaryAction(root.actions))
@@ -314,13 +368,14 @@ Panel {
       }
 
       Flickable {
+        id: flick
         anchors.fill: parent
         contentWidth: width
         contentHeight: column.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         interactive: contentHeight > height
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        QQC.ScrollBar.vertical: QQC.ScrollBar { policy: QQC.ScrollBar.AsNeeded }
 
         Column {
           id: column
@@ -344,7 +399,7 @@ Panel {
           }
 
           Repeater {
-            model: root.actions
+            model: root.pick ? [] : root.actions
             delegate: ActionRow {
               required property var modelData
               label: modelData.label
@@ -352,6 +407,52 @@ Panel {
               badge: modelData.done === true ? "\u2713" : modelData.key
               dimmed: modelData.done === true || (tracker.running && modelData.id.indexOf("track") === 0)
               onActivated: root.run(modelData)
+            }
+          }
+
+          Text {
+            visible: root.pick !== null
+            width: parent.width
+            topPadding: Style.space(4)
+            text: !root.pick ? ""
+              : root.pick.step === "group" ? "Track " + root.pick.label + " in which group?"
+              : "Name " + root.pick.label + " in " + Model.groupLabel(root.pick.path)
+            color: root.foreground
+            font.family: root.fontFamily
+            wrapMode: Text.Wrap
+          }
+
+          TextField {
+            id: pickField
+            visible: root.pick !== null
+            width: parent.width
+            foreground: root.foreground
+            font.family: root.fontFamily
+            placeholderText: root.pick && root.pick.step === "name"
+              ? "Display name, or empty to show " + root.pick.label
+              : "Filter, or type a new group name"
+            onTextChanged: { root.pickText = text; root.pickIndex = 0 }
+
+            Keys.onPressed: function(event) {
+              if (event.key === Qt.Key_Escape) root.backPick()
+              else if (event.key === Qt.Key_Up) root.movePick(-1)
+              else if (event.key === Qt.Key_Down) root.movePick(1)
+              else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) root.choosePick(root.pickRows[root.pickIndex])
+              else if (event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) return
+              event.accepted = true
+            }
+          }
+
+          Repeater {
+            model: root.pickRows
+            delegate: ActionRow {
+              required property var modelData
+              required property int index
+              label: modelData.label
+              hint: modelData.detail || ""
+              highlighted: index === root.pickIndex
+              onHighlightedChanged: if (highlighted) root.reveal(this)
+              onActivated: root.choosePick(modelData)
             }
           }
 
@@ -373,7 +474,8 @@ Panel {
             font.family: root.fontFamily
             font.pixelSize: Style.font.body * 0.8
             readonly property int keyed: root.actions.filter(function(a) { return a.key !== "" }).length
-            text: (keyed > 1 ? "1–" + keyed + " act · " : keyed === 1 ? "1 act · " : "")
+            text: root.pick ? "↑↓ select · ↵ choose · Esc back"
+              : (keyed > 1 ? "1–" + keyed + " act · " : keyed === 1 ? "1 act · " : "")
               + "/ search tracked · o open Oculus"
           }
         }

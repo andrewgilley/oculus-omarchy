@@ -190,7 +190,7 @@ function actionsFor(item, tracking) {
   if (item.kind !== "user") {
     actions.push(trackedRepo
       ? { id: "trackProject", label: "Tracking " + item.repository, hint: "already in your tracking file", done: true }
-      : { id: "trackProject", label: "Track " + item.repository, hint: "add this project to oculus.nvim" })
+      : { id: "trackProject", label: "Track " + item.repository, hint: "choose a group and name" })
     actions.push({ id: "project", label: "Open " + item.repository + " activity", hint: "in Oculus" })
   }
 
@@ -198,7 +198,7 @@ function actionsFor(item, tracking) {
     ? { id: "trackUser", label: "Tracking " + owner,
         hint: item.kind === "user" ? "already in your tracking file" : "the owner is already tracked", done: true }
     : { id: "trackUser", label: "Track " + owner,
-        hint: item.kind === "user" ? "add this user to oculus.nvim" : "add the owner to oculus.nvim" })
+        hint: item.kind === "user" ? "choose a group and name" : "the owner · choose a group and name" })
   actions.push({ id: "user", label: "Open " + owner + "'s activity", hint: "in Oculus" })
 
   var digit = 0
@@ -318,7 +318,7 @@ function rowActions(row, tracking) {
   }
   var actions = actionsFor(item, tracking).map(function(action) {
     var copy = { id: action.id, label: action.label, hint: action.hint, done: action.done === true }
-    if (!copy.done && (copy.id === "trackProject" || copy.id === "trackUser")) copy.hint = "choose a group next"
+    if (!copy.done && (copy.id === "trackProject" || copy.id === "trackUser")) copy.hint = "choose a group and name next"
     return copy
   })
   if (row.kind === "link") actions.push({ id: "browser", label: "Open on " + forgeName(item.provider), hint: item.url })
@@ -347,6 +347,17 @@ function groupRows(tracking, list, query, current) {
       label: "New group \u201c" + q + "\u201d", detail: "at the top level", path: [q] })
   }
   return rows
+}
+
+// The last step of tracking: what to call the new entry. One row, naming it
+// after the query, or after its identity when the query is empty, which leaves
+// the name unset. { key, section, kind: name, icon, label, detail, name }
+function nameRows(target, query) {
+  var name = query.trim()
+  if (/[\u0000-\u001f]/.test(name)) return []
+  return [{ key: "name", section: "Name", kind: "name", icon: ICONS[target.list === "users" ? "user" : "project"],
+    label: name ? "Track as \u201c" + name + "\u201d" : "Track as " + target.label,
+    detail: "in " + groupLabel(target.path) + (name ? "" : " \u00b7 no display name"), name: name }]
 }
 
 // This plugin's inline settings from shell.json: its bar entry, or a plugins[] entry.

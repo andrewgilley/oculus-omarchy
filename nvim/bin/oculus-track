@@ -3,12 +3,13 @@
 -- omarchy.json) to reload it.
 --
 -- Usage:
---   oculus-track [--file PATH] [--group GROUP] <github|codeberg> <owner/repo|login>   track
+--   oculus-track [--file PATH] [--group GROUP] [--name NAME] <github|codeberg> <owner/repo|login>   track
 --   oculus-track [--file PATH] --move GROUP <github|codeberg> <owner/repo|login>      move to a group
 --   oculus-track [--file PATH] --remove <github|codeberg> <owner/repo|login>          untrack
 --
 -- GROUP is a path of group names, "/Editors/Plugins/" ("/" is the top level),
--- or a JSON array of names. Missing groups are created.
+-- or a JSON array of names. Missing groups are created. NAME is the display name
+-- Oculus shows for the new entry.
 
 local script = vim.uv.fs_realpath(arg[0]) or arg[0]
 local root = vim.fn.fnamemodify(script, ":h:h")
@@ -20,7 +21,7 @@ vim.opt.rtp:append(oculus)
 
 local track = require("oculus_omarchy.track")
 local args = { unpack(arg) }
-local file, group, move, remove = nil, nil, nil, false
+local file, group, move, name, remove = nil, nil, nil, nil, false
 
 local function fail(message)
   io.stderr:write(message .. "\n")
@@ -32,11 +33,13 @@ while args[1] and args[1]:sub(1, 2) == "--" do
 
   if flag == "--remove" then
     remove = true
-  elseif flag == "--file" or flag == "--group" or flag == "--move" then
+  elseif flag == "--file" or flag == "--group" or flag == "--move" or flag == "--name" then
     local value = table.remove(args, 1) or fail(flag .. " needs a value")
 
     if flag == "--file" then
       file = value
+    elseif flag == "--name" then
+      name = vim.trim(value) ~= "" and vim.trim(value) or nil
     else
       local path = track.parse_group(value) or fail("invalid group: " .. value)
       if flag == "--group" then group = path else move = path end
@@ -53,7 +56,7 @@ if remove then
 elseif move then
   ok, message = track.move(args[1], args[2], move, file)
 else
-  ok, message = track.add(args[1], args[2], file, group)
+  ok, message = track.add(args[1], args[2], file, group, name)
 end
 
 if not ok then

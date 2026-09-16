@@ -43,10 +43,11 @@ the panel says so instead of offering actions.
   `1`–`n` stay in step as things become tracked.
 - Every repo page offers its **owner** as well as the project, so you can pick
   up a user you follow from any page of one of their repos.
-- **Tracking** goes through oculus.nvim's own `oculus.tracking` module (the
-  same validation and atomic write the Oculus UI uses). New entries go at the
-  root of the Projects or Users list, and you can move them into groups in
-  Oculus. It works with no Neovim open. If a Neovim running the bridge is up,
+- **Tracking** asks in the panel which group to put the entry in (type to
+  filter, or type a new group's name) and then what to call it (Enter twice
+  keeps the top level and no name). It goes through
+  oculus.nvim's own `oculus.tracking` module (the same validation and atomic
+  write the Oculus UI uses) and works with no Neovim open. If a Neovim running the bridge is up,
   it's told to reload the tracking file over RPC.
 - The panel only ever talks about the page you're on. Browse the things you
   already track in Oculus itself (`o`, or middle-click the bar icon).
@@ -136,7 +137,8 @@ selected row's actions are on the right:
   project or its owner, open their feeds.
 
 Tracking and moving open a group picker in the same card; type a name that
-isn't there to create a new top-level group. `summon` takes an optional
+isn't there to create a new top-level group. Tracking then asks for the display
+name Oculus shows; leave it empty to show the repository or login. `summon` takes an optional
 starting query: `omarchy-shell shell summon andrewgilley.oculus '{"query": "zig"}'`.
 
 ## Using it
@@ -148,7 +150,7 @@ starting query: `omarchy-shell shell summon andrewgilley.oculus '{"query": "zig"
 | Overlay keys | type to search · ↑↓ select · Enter runs the first action · Tab into the actions · Alt+Enter open in browser · Del untrack · Ctrl+V paste · Esc clear, back, close |
 | Tracked    | dimmed row, ✓ instead of a number — it's already in the tracking file |
 | IPC        | `omarchy-shell andrewgilley.oculus toggle` opens the panel on the current page; `item <url>` on any URL; `status` · `omarchy-shell shell toggle andrewgilley.oculus '{}'` the overlay |
-| CLI        | `oculus-open inspect <url>` · `oculus-open project github:owner/repo` · `oculus-open user github:login` · `oculus-track github owner/repo` · `oculus-track codeberg login` · `oculus-track --group /Editors/ github owner/repo` · `oculus-track --move / github owner/repo` · `oculus-track --remove github owner/repo` |
+| CLI        | `oculus-open inspect <url>` · `oculus-open project github:owner/repo` · `oculus-open user github:login` · `oculus-track github owner/repo` · `oculus-track codeberg login` · `oculus-track --group /Editors/ --name Name github owner/repo` · `oculus-track --move / github owner/repo` · `oculus-track --remove github owner/repo` |
 
 To get from a page to the panel in one key press, bind the IPC call to a key
 in Hyprland:
