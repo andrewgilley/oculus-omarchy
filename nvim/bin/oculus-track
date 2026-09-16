@@ -1,10 +1,14 @@
 #!/usr/bin/env -S nvim -l
--- Add a project or user to the oculus.nvim tracking file, then ask a running
--- Neovim (from omarchy.json) to :OculusReloadTracking.
+-- Edit the oculus.nvim tracking file, then ask a running Neovim (from
+-- omarchy.json) to reload it.
 --
 -- Usage:
---   oculus-track [--file PATH] <github|codeberg> <owner/repo>   track a project
---   oculus-track [--file PATH] <github|codeberg> <login>        track a user
+--   oculus-track [--file PATH] [--group GROUP] <github|codeberg> <owner/repo|login>   track
+--   oculus-track [--file PATH] --move GROUP <github|codeberg> <owner/repo|login>      move to a group
+--   oculus-track [--file PATH] --remove <github|codeberg> <owner/repo|login>          untrack
+--
+-- GROUP is a path of group names, "/Editors/Plugins/" ("/" is the top level),
+-- or a JSON array of names. Missing groups are created.
 
 local script = vim.uv.fs_realpath(arg[0]) or arg[0]
 local root = vim.fn.fnamemodify(script, ":h:h")
@@ -14,21 +18,46 @@ local oculus = vim.env.OCULUS_NVIM_PATH
 vim.opt.rtp:append(root)
 vim.opt.rtp:append(oculus)
 
-local args = { unpack(arg) }
-local file = nil
-
-if args[1] == "--file" then
-  file = args[2]
-  table.remove(args, 1)
-  table.remove(args, 1)
-end
-
 local track = require("oculus_omarchy.track")
-local ok, message = track.add(args[1], args[2], file)
+local args = { unpack(arg) }
+local file, group, move, remove = nil, nil, nil, false
 
-if not ok then
+local function fail(message)
   io.stderr:write(message .. "\n")
   os.exit(1)
+end
+
+while args[1] and args[1]:sub(1, 2) == "--" do
+  local flag = table.remove(args, 1)
+
+  if flag == "--remove" then
+    remove = true
+  elseif flag == "--file" or flag == "--group" or flag == "--move" then
+    local value = table.remove(args, 1) or fail(flag .. " needs a value")
+
+    if flag == "--file" then
+      file = value
+    else
+      local path = track.parse_group(value) or fail("invalid group: " .. value)
+      if flag == "--group" then group = path else move = path end
+    end
+  else
+    fail("unknown option " .. flag)
+  end
+end
+
+local ok, message
+
+if remove then
+  ok, message = track.remove(args[1], args[2], file)
+elseif move then
+  ok, message = track.move(args[1], args[2], move, file)
+else
+  ok, message = track.add(args[1], args[2], file, group)
+end
+
+if not ok then
+  fail(message)
 end
 
 io.stdout:write(message .. "\n")

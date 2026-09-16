@@ -120,23 +120,32 @@ function describe(item) {
 
 // ---- Tracking file (~/.config/oculus/tracking.json) ---------------------------
 // { version: 1, projects: [tree], users: [tree] }; groups have `children`.
+// Leaves come back flattened, each with `group`: the names of the groups it sits
+// in from the list root ([] at the top level). `groups` lists every group path
+// per list in tree order, the top level first.
 function parseTracking(text) {
-  var tracking = { ok: false, projects: [], users: [], keys: {} }
+  var tracking = { ok: false, projects: [], users: [], keys: {}, groups: { projects: [[]], users: [[]] } }
   var data = decode(text)
   if (!data || data.version !== 1) return tracking
 
-  function flatten(nodes, output) {
+  function flatten(nodes, path, output, groups) {
     if (!(nodes instanceof Array)) return
     for (var i = 0; i < nodes.length; i++) {
       var node = nodes[i]
       if (!node || typeof node !== "object") continue
-      if (node.children instanceof Array) flatten(node.children, output)
-      else output.push(node)
+      if (node.children instanceof Array) {
+        var inner = path.concat([String(node.name)])
+        groups.push(inner)
+        flatten(node.children, inner, output, groups)
+      } else {
+        node.group = path
+        output.push(node)
+      }
     }
   }
 
-  flatten(data.projects, tracking.projects)
-  flatten(data.users, tracking.users)
+  flatten(data.projects, [], tracking.projects, tracking.groups.projects)
+  flatten(data.users, [], tracking.users, tracking.groups.users)
   tracking.projects = tracking.projects.filter(function(p) { return typeof p.repository === "string" })
   tracking.users = tracking.users.filter(function(u) { return typeof u.username === "string" })
   tracking.projects.forEach(function(p) { tracking.keys[projectKey(p.provider, p.repository)] = true })
@@ -217,4 +226,137 @@ function shellQuote(value) {
 function remoteCommand(server, exCommand) {
   if (!server) return ""
   return "nvim --server " + shellQuote(server) + " --remote-send " + shellQuote("<C-\\><C-n><Cmd>" + exCommand + "<CR>")
+}
+
+// ---- Overlay: search tracked projects and users, the current page, a URL -------
+var ICONS = {
+  project: "\uf401", user: "\uf007", pull_request: "\uf407", issue: "\uf41b",
+  commit: "\uf417", group: "\uf07b", newGroup: "\uf067",
+}
+
+function forgeName(provider) { return provider === "codeberg" ? "Codeberg" : "GitHub" }
+
+function forgeUrl(provider, identity) {
+  return (provider === "codeberg" ? "https://codeberg.org/" : "https://github.com/") + identity
+}
+
+function groupLabel(path) { return path && path.length > 0 ? path.join(" \u203a ") : "Top level" }
+
+// A tracked leaf in the shape parseUrl returns for its page.
+function trackedItem(list, node) {
+  var provider = node.provider === "codeberg" ? "codeberg" : "github"
+  if (list === "users") return { kind: "user", provider: provider, owner: node.username, url: forgeUrl(provider, node.username) }
+  var parts = node.repository.split("/")
+  return { kind: "project", provider: provider, owner: parts[0], repo: parts[1], repository: node.repository,
+    url: forgeUrl(provider, node.repository) }
+}
+
+// 0 when some word of the query is missing from the row's text; 2 when the label
+// (or a repository's name) starts with the query, so exact-ish hits rise; else 1.
+function matchScore(text, label, query) {
+  var words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return 1
+  var haystack = text.toLowerCase()
+  for (var i = 0; i < words.length; i++) if (haystack.indexOf(words[i]) < 0) return 0
+  var bare = label.toLowerCase().replace(/^@/, "")
+  return bare.indexOf(words[0]) === 0 || bare.split("/").pop().indexOf(words[0]) === 0 ? 2 : 1
+}
+
+function itemRow(item, kind, section) {
+  return { key: kind + ":" + item.url, section: section, kind: kind, icon: ICONS[item.kind] || ICONS.project,
+    label: describe(item), detail: item.url, item: item }
+}
+
+// Rows for the overlay's list: a URL typed or pasted into the search, the page
+// open in the browser, then every tracked project and user that matches.
+// { key, section, kind: link | page | tracked, icon, label, detail, item,
+//   list, identity, group }
+function paletteRows(tracking, pageItem, query) {
+  var rows = []
+  var typed = parseUrl(query)
+  if (typed) rows.push(itemRow(typed, "link", "Link"))
+  if (pageItem && !typed && matchScore(describe(pageItem) + " " + pageItem.url, describe(pageItem), query) > 0) {
+    rows.push(itemRow(pageItem, "page", "This page"))
+  }
+  if (typed) return rows
+
+  ;["projects", "users"].forEach(function(list) {
+    var scored = []
+    tracking[list].forEach(function(node, index) {
+      var item = trackedItem(list, node)
+      var identity = list === "users" ? node.username : node.repository
+      var label = describe(item)
+      // A display name that only repeats the identity (or the repo's name) adds nothing.
+      var name = typeof node.name === "string"
+        && [identity, identity.split("/").pop()].indexOf(node.name) < 0 ? node.name : ""
+      var detail = [groupLabel(node.group), forgeName(item.provider)].concat(name ? [name] : []).join(" \u00b7 ")
+      var score = matchScore([label, name, node.group.join(" "), item.provider].join(" "), label, query)
+      if (score === 0) return
+      scored.push({ score: score, index: index, row: {
+        key: list + ":" + item.provider + ":" + identity.toLowerCase(), section: list === "users" ? "Users" : "Projects",
+        kind: "tracked", icon: ICONS[item.kind], label: label, detail: detail, item: item,
+        list: list, identity: identity, group: node.group } })
+    })
+    scored.sort(function(a, b) { return b.score - a.score || a.index - b.index })
+    scored.forEach(function(entry) { rows.push(entry.row) })
+  })
+  return rows
+}
+
+// What the overlay offers for a row: [{ id, label, hint, done }]. The first
+// action that isn't done is what Enter runs.
+function rowActions(row, tracking) {
+  if (!row) return []
+  var item = row.item
+  if (row.kind === "tracked") {
+    return [
+      { id: item.kind === "user" ? "user" : "project", label: "Open activity", hint: "in Oculus" },
+      { id: "browser", label: "Open on " + forgeName(item.provider), hint: item.url },
+      { id: "move", label: "Move to a group\u2026", hint: "now in " + groupLabel(row.group) },
+      { id: "untrack", label: "Untrack", hint: "remove from your tracking file" },
+    ]
+  }
+  var actions = actionsFor(item, tracking).map(function(action) {
+    var copy = { id: action.id, label: action.label, hint: action.hint, done: action.done === true }
+    if (!copy.done && (copy.id === "trackProject" || copy.id === "trackUser")) copy.hint = "choose a group next"
+    return copy
+  })
+  if (row.kind === "link") actions.push({ id: "browser", label: "Open on " + forgeName(item.provider), hint: item.url })
+  return actions
+}
+
+// Where to put a project or user: every group in its list, filtered by the
+// query, plus a new top-level group named after the query when none matches it
+// exactly. { key, section, kind: group | newGroup, icon, label, detail, path }
+function groupRows(tracking, list, query, current) {
+  var q = query.trim()
+  var rows = []
+  var exact = false
+  var groups = tracking.groups[list] || [[]]
+  for (var i = 0; i < groups.length; i++) {
+    var path = groups[i]
+    var label = groupLabel(path)
+    if (q && path.length > 0 && path[path.length - 1].toLowerCase() === q.toLowerCase()) exact = true
+    if (matchScore(label, label, q) === 0) continue
+    var here = current && current.join("\n") === path.join("\n")
+    rows.push({ key: "group:" + path.join("\n"), section: "Groups", kind: "group", icon: ICONS.group,
+      label: label, detail: here ? "current group" : "", path: path, current: here })
+  }
+  if (q && !exact && !/[\u0000-\u001f]/.test(q)) {
+    rows.push({ key: "newGroup:" + q, section: "Groups", kind: "newGroup", icon: ICONS.newGroup,
+      label: "New group \u201c" + q + "\u201d", detail: "at the top level", path: [q] })
+  }
+  return rows
+}
+
+// This plugin's inline settings from shell.json: its bar entry, or a plugins[] entry.
+function pluginSettings(text, id) {
+  var data = decode(text)
+  if (!data || typeof data !== "object") return {}
+  var layout = data.bar && data.bar.layout ? data.bar.layout : {}
+  var entries = [].concat(layout.left || [], layout.center || [], layout.right || [], data.plugins || [])
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i] && typeof entries[i] === "object" && entries[i].id === id) return entries[i]
+  }
+  return {}
 }

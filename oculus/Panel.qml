@@ -82,6 +82,12 @@ Panel {
     }
   }
 
+  // The overlay: search everything you track, not just this page.
+  function browseTracked() {
+    Quickshell.execDetached(["omarchy-shell", "shell", "summon", root.moduleName, "{}"])
+    close()
+  }
+
   // Oculus in the Neovim you already have, else a fresh one.
   function openOculus() {
     var cmd = nvim.live ? Model.remoteCommand(nvim.server, "OculusOpen") : ""
@@ -185,6 +191,7 @@ Panel {
     }
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.MiddleButton) root.openOculus()
+      else if (buttonCode === Qt.RightButton) root.browseTracked()
       else root.toggle()
     }
   }
@@ -303,6 +310,7 @@ Panel {
         var action = Model.actionForKey(root.actions, t)
         if (action) root.run(action)
         else if (t === "o" || t === "O") root.openOculus()
+        else if (t === "/" || t === "s" || t === "S") root.browseTracked()
       }
 
       Flickable {
@@ -366,7 +374,7 @@ Panel {
             font.pixelSize: Style.font.body * 0.8
             readonly property int keyed: root.actions.filter(function(a) { return a.key !== "" }).length
             text: (keyed > 1 ? "1–" + keyed + " act · " : keyed === 1 ? "1 act · " : "")
-              + "o open Oculus"
+              + "/ search tracked · o open Oculus"
           }
         }
       }

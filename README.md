@@ -113,15 +113,42 @@ Point lazy.nvim at your clone instead, and run `./install.sh` from it:
 }
 ```
 
+## The overlay
+
+For everything beyond the page you're on, there's a full-screen search in the
+style of Omarchy's clipboard and emoji pickers. Right-click the bar icon, press
+`/` in the popout, or bind it to a key:
+
+```lua
+-- ~/.config/hypr/bindings.lua
+o.bind("SUPER + SHIFT + O", "Oculus: search tracked",
+  [[omarchy-shell shell toggle andrewgilley.oculus '{}']])
+```
+
+It lists every project and user in your tracking file with its group, plus the
+page open in the browser, and searches across names, groups and providers.
+Type or paste (`Ctrl+V`) a GitHub or Codeberg URL to act on that instead. The
+selected row's actions are on the right:
+
+- **Tracked entries:** open the activity feed, open on GitHub/Codeberg, move
+  to a group, untrack (asks first).
+- **The page, or a URL:** inspect a pull request, issue or commit, track the
+  project or its owner, open their feeds.
+
+Tracking and moving open a group picker in the same card; type a name that
+isn't there to create a new top-level group. `summon` takes an optional
+starting query: `omarchy-shell shell summon andrewgilley.oculus '{"query": "zig"}'`.
+
 ## Using it
 
 | Where      | Action                                                          |
 |------------|-----------------------------------------------------------------|
-| Bar        | left: popout on the current page · middle: `:OculusOpen`        |
-| Panel keys | `1`–`n` run an action · Enter runs the first · `o` open Oculus  |
+| Bar        | left: popout on the current page · middle: `:OculusOpen` · right: overlay |
+| Panel keys | `1`–`n` run an action · Enter runs the first · `/` overlay · `o` open Oculus |
+| Overlay keys | type to search · ↑↓ select · Enter runs the first action · Tab into the actions · Alt+Enter open in browser · Del untrack · Ctrl+V paste · Esc clear, back, close |
 | Tracked    | dimmed row, ✓ instead of a number — it's already in the tracking file |
-| IPC        | `omarchy-shell andrewgilley.oculus toggle` opens the panel on the current page; `item <url>` on any URL; `status` |
-| CLI        | `oculus-open inspect <url>` · `oculus-open project github:owner/repo` · `oculus-open user github:login` · `oculus-track github owner/repo` · `oculus-track codeberg login` |
+| IPC        | `omarchy-shell andrewgilley.oculus toggle` opens the panel on the current page; `item <url>` on any URL; `status` · `omarchy-shell shell toggle andrewgilley.oculus '{}'` the overlay |
+| CLI        | `oculus-open inspect <url>` · `oculus-open project github:owner/repo` · `oculus-open user github:login` · `oculus-track github owner/repo` · `oculus-track codeberg login` · `oculus-track --group /Editors/ github owner/repo` · `oculus-track --move / github owner/repo` · `oculus-track --remove github owner/repo` |
 
 To get from a page to the panel in one key press, bind the IPC call to a key
 in Hyprland:

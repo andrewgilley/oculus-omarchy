@@ -1,9 +1,11 @@
--- Add projects and users to the oculus.nvim tracking file from outside Neovim.
+-- Track, untrack and regroup projects and users in the oculus.nvim tracking
+-- file from outside Neovim.
 --
--- Edits go through oculus's own tracking module (validated, written atomically)
--- and land at the root of the Projects or Users list. A running Neovim that
+-- Edits go through oculus's own tracking module (validated, written atomically).
+-- Groups are addressed by their names from the list root, and ones that don't
+-- exist yet are created at the end of their parent. A running Neovim that
 -- published its socket in omarchy.json is then asked to reload, so its Oculus
--- window picks the new entry up.
+-- window picks the change up.
 
 local M = {}
 
@@ -27,6 +29,12 @@ local function read_json(file)
   return ok and type(data) == "table" and data or nil
 end
 
+local function matches(node, provider, field, value)
+  return type(node[field]) == "string"
+    and node[field]:lower() == value:lower()
+    and (node.provider or "github") == provider
+end
+
 -- Identities are unique per provider across a whole list, groups included.
 local function contains(nodes, provider, field, value)
   for _, node in ipairs(nodes) do
@@ -34,16 +42,66 @@ local function contains(nodes, provider, field, value)
       if contains(node.children, provider, field, value) then
         return true
       end
-    elseif
-      type(node[field]) == "string"
-      and node[field]:lower() == value:lower()
-      and (node.provider or "github") == provider
-    then
+    elseif matches(node, provider, field, value) then
       return true
     end
   end
 
   return false
+end
+
+-- Detach the leaf for provider/value from wherever it sits and return it.
+local function take(nodes, provider, field, value)
+  for index, node in ipairs(nodes) do
+    if type(node.children) == "table" then
+      local found = take(node.children, provider, field, value)
+
+      if found then
+        return found
+      end
+    elseif matches(node, provider, field, value) then
+      return table.remove(nodes, index)
+    end
+  end
+end
+
+-- The children of the group at path (names from the list root; {} is the root),
+-- creating groups that don't exist yet. Names match ignoring case, as Oculus
+-- keeps sibling group names distinct that way.
+local function group_children(nodes, path)
+  for _, name in ipairs(path) do
+    local found = nil
+
+    for _, node in ipairs(nodes) do
+      if type(node.children) == "table" and type(node.name) == "string" and node.name:lower() == name:lower() then
+        found = node
+        break
+      end
+    end
+
+    if not found then
+      found = { name = name, children = {} }
+      table.insert(nodes, found)
+    end
+
+    nodes = found.children
+  end
+
+  return nodes
+end
+
+-- "/Editors/Plugins/" or a JSON array of names, for names containing "/".
+function M.parse_group(text)
+  if type(text) ~= "string" or text == "" or text == "/" then
+    return {}
+  end
+
+  if text:sub(1, 1) == "[" then
+    local ok, names = pcall(vim.json.decode, text)
+    return ok and type(names) == "table" and names or nil
+  end
+
+  return vim.split(text, "/", { trimempty = true })
 end
 
 -- Best effort: a missing or stale socket just means nothing to reload.
@@ -67,8 +125,9 @@ local function reload_running_neovim()
   end
 end
 
--- provider: "github" | "codeberg"; identity: "owner/repo" or "login".
-function M.add(provider, identity, file)
+-- Load the tracking file, apply edit(tree, list, field, label), save and tell
+-- a running Neovim. edit returns false plus a message to stop without saving.
+local function edit(provider, identity, file, fn)
   if provider ~= "github" and provider ~= "codeberg" then
     return false, "provider must be github or codeberg"
   end
@@ -94,13 +153,15 @@ function M.add(provider, identity, file)
   local list = is_project and "projects" or "users"
   local field = is_project and "repository" or "username"
   local label = is_project and identity or ("@" .. identity)
-
-  if contains(config._tracking.tree[list], provider, field, identity) then
-    return true, "already tracking " .. label
-  end
+  local message = nil
 
   local saved, save_err = tracking.mutate(config, function(tree)
-    table.insert(tree[list], { [field] = identity, provider = provider })
+    local done
+    done, message = fn(tree[list], field, label)
+
+    if not done then
+      error(message, 0)
+    end
   end)
 
   if not saved then
@@ -108,7 +169,45 @@ function M.add(provider, identity, file)
   end
 
   reload_running_neovim()
-  return true, "tracking " .. label
+  return true, message
+end
+
+-- provider: "github" | "codeberg"; identity: "owner/repo" or "login";
+-- group: path of group names ({} or nil for the list root).
+function M.add(provider, identity, file, group)
+  return edit(provider, identity, file, function(nodes, field, label)
+    if contains(nodes, provider, field, identity) then
+      return true, "already tracking " .. label
+    end
+
+    table.insert(group_children(nodes, group or {}), { [field] = identity, provider = provider })
+    return true, "tracking " .. label
+  end)
+end
+
+function M.remove(provider, identity, file)
+  return edit(provider, identity, file, function(nodes, field, label)
+    if not take(nodes, provider, field, identity) then
+      return false, "not tracking " .. label
+    end
+
+    return true, "stopped tracking " .. label
+  end)
+end
+
+-- Append the entry to the end of the group at path.
+function M.move(provider, identity, group, file)
+  return edit(provider, identity, file, function(nodes, field, label)
+    local node = take(nodes, provider, field, identity)
+
+    if not node then
+      return false, "not tracking " .. label
+    end
+
+    table.insert(group_children(nodes, group or {}), node)
+    local where = #(group or {}) > 0 and table.concat(group, " › ") or "the top level"
+    return true, "moved " .. label .. " to " .. where
+  end)
 end
 
 return M

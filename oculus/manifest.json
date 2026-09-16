@@ -2,13 +2,15 @@
   "schemaVersion": 1,
   "id": "andrewgilley.oculus",
   "name": "Oculus",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "author": "Andrew Gilley",
   "license": "MIT",
   "description": "Recognises the GitHub/Codeberg project or user open in your browser, shows whether oculus.nvim already tracks it, and tracks, opens or inspects it from the Omarchy bar.",
-  "kinds": ["bar-widget"],
+  "kinds": ["bar-widget", "overlay"],
+  "keepLoaded": true,
   "entryPoints": {
-    "barWidget": "Panel.qml"
+    "barWidget": "Panel.qml",
+    "overlay": "Overlay.qml"
   },
   "barWidget": {
     "displayName": "Oculus",
