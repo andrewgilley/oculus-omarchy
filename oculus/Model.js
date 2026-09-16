@@ -19,6 +19,15 @@ function parseSnapshot(text, nowSec, staleAfterSec) {
   return state
 }
 
+// ---- Browser page (browser.json, written by the Oculus Page extension's host) --
+// { version, url, updated_at, browser_pid }. url is "" when the active tab isn't
+// on GitHub or Codeberg: the extension can't see URLs on any other site.
+function parseBrowser(text) {
+  var data = decode(text)
+  if (!data || data.version !== 1) return { ok: false, url: "", pid: 0 }
+  return { ok: true, url: String(data.url || ""), pid: Number(data.browser_pid) || 0 }
+}
+
 function decode(text) {
   if (!text) return null
   try {

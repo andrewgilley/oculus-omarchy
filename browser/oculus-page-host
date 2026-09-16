@@ -1,0 +1,28 @@
+#!/bin/bash
+# Native messaging host for the Oculus Page browser extension.
+#
+# Chromium starts this once per page change with one message, {url}, and
+# it writes $XDG_STATE_HOME/oculus/browser.json for the bar widget:
+#   { version, url, updated_at, browser_pid }
+# browser_pid lets the widget tell a page that's still open from one left behind
+# by a browser that has since quit.
+set -euo pipefail
+
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/oculus"
+file="$state_dir/browser.json"
+
+length=$(head -c4 | od -An -v -tu4 --endian=little | tr -d ' ')
+[[ -n ${length:-} ]] && (( length > 0 && length < 65536 )) || exit 0
+payload=$(head -c "$length")
+
+mkdir -p "$state_dir"
+tmp=$(mktemp "$state_dir/.browser.json.XXXXXX")
+if jq -c --argjson now "$(date +%s)" --argjson pid "$PPID" \
+  '{version: 1, url: (.url // "" | tostring), updated_at: $now, browser_pid: $pid}' \
+  <<<"$payload" >"$tmp"; then
+  mv -f "$tmp" "$file"
+  printf '\x0b\x00\x00\x00{"ok":true}'
+else
+  rm -f "$tmp"
+  printf '\x0c\x00\x00\x00{"ok":false}'
+fi

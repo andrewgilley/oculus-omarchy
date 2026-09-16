@@ -9,12 +9,13 @@ import "Model.js" as Model
 
 // Oculus bar widget + popout: act on the GitHub/Codeberg page you're looking at.
 //
-// Copy a project, user, pull request, issue or commit URL (Omarchy's Chromium
-// copies the current URL with Alt+Shift+L) and open the panel: it recognises
-// the page, says whether oculus.nvim already tracks it, and offers to track the
-// project and its owner, open their activity feeds, or inspect the item. The
-// panel only ever talks about the page you're on — browse the things you
-// already track in Oculus itself.
+// The Oculus Page browser extension reports the GitHub/Codeberg page open in
+// the browser (browser/oculus-page, via browser/oculus-page-host → browser.json).
+// Open the panel and it recognises that page — a project, user, pull request,
+// issue or commit — says whether oculus.nvim already tracks it, and offers to
+// track the project and its owner, open their activity feeds, or inspect the
+// item. The panel only ever talks about the page you're on — browse the things
+// you already track in Oculus itself.
 //
 //   oculus-open  <inspect|project|user|oculus> [target]   new Ghostty + Neovim
 //   oculus-track <github|codeberg> <owner/repo|login>    edits tracking.json
@@ -32,19 +33,27 @@ Panel {
 
   property string snapshotText: ""
   property string trackingText: ""
-  property string clipboardText: ""
-  // Set by the `item` IPC call; wins over the clipboard until the panel closes.
+  property string browserText: ""
+  // Whether the browser that wrote browser.json is still running; checked on open.
+  property bool browserAlive: true
+  // Set by the `item` IPC call; wins over the browser page until the panel closes.
   property string pinnedText: ""
   property string lastError: ""
 
   readonly property var nvim: Model.parseSnapshot(snapshotText, Math.floor(Date.now() / 1000), staleAfterSec)
   readonly property var tracking: Model.parseTracking(trackingText)
-  readonly property var item: Model.parseUrl(pinnedText || clipboardText)
+  readonly property var browser: Model.parseBrowser(browserText)
+  readonly property string pageUrl: pinnedText || (browserAlive ? browser.url : "")
+  readonly property var item: Model.parseUrl(pageUrl)
   readonly property var actions: Model.actionsFor(item, tracking)
   // "Tracked" / "Not tracked" for the hero pill; "" when there's nothing to act on.
   readonly property string trackedLabel: Model.trackedLabel(item, tracking)
-  // A URL is on the clipboard but it isn't a forge page we can do anything with.
-  readonly property bool unusable: item === null && (pinnedText || clipboardText).trim() !== ""
+  // Why there's nothing to act on, for the hero; "" when there is.
+  readonly property string emptyReason: item !== null ? ""
+    : pageUrl !== "" ? "This GitHub or Codeberg page isn't a project or user"
+    : !browser.ok ? "Run install.sh and restart the browser to load the Oculus Page extension"
+    : !browserAlive ? "The browser isn't open"
+    : "The browser isn't on a GitHub or Codeberg page"
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color dim: Qt.darker(foreground, 1.55)
@@ -85,8 +94,12 @@ Panel {
     }
   }
 
-  function readClipboard() {
-    if (!clipboard.running) clipboard.running = true
+  function checkBrowser() {
+    if (browser.pid <= 0) { browserAlive = true; return }
+    if (!browserCheck.running) {
+      browserCheck.command = ["test", "-d", "/proc/" + browser.pid]
+      browserCheck.running = true
+    }
   }
 
   implicitWidth: button.implicitWidth
@@ -94,7 +107,7 @@ Panel {
 
   onOpenedChanged: {
     if (opened) {
-      readClipboard()
+      checkBrowser()
       Qt.callLater(function() { keyCatcher.forceActiveFocus() })
     } else {
       pinnedText = ""
@@ -112,6 +125,15 @@ Panel {
   }
 
   FileView {
+    path: root.stateDir + "/browser.json"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: { root.browserText = text(); root.checkBrowser() }
+    onLoadFailed: root.browserText = ""
+  }
+
+  FileView {
     path: root.trackingPath
     watchChanges: true
     printErrors: false
@@ -121,12 +143,8 @@ Panel {
   }
 
   Process {
-    id: clipboard
-    command: ["wl-paste", "--no-newline", "--type", "text/plain"]
-    stdout: StdioCollector { id: clipOut }
-    onExited: function(exitCode) {
-      root.clipboardText = exitCode === 0 ? clipOut.text.slice(0, 2048) : ""
-    }
+    id: browserCheck
+    onExited: function(exitCode) { root.browserAlive = exitCode === 0 }
   }
 
   Process {
@@ -151,7 +169,7 @@ Panel {
       root.open()
       return "ok"
     }
-    function status(): string { return root.item ? Model.describe(root.item) : "no item on the clipboard" }
+    function status(): string { return root.item ? Model.describe(root.item) : root.emptyReason }
   }
 
   BarIconButton {
@@ -285,7 +303,6 @@ Panel {
         var action = Model.actionForKey(root.actions, t)
         if (action) root.run(action)
         else if (t === "o" || t === "O") root.openOculus()
-        else if (t === "p" || t === "P") { root.pinnedText = ""; root.readClipboard() }
       }
 
       Flickable {
@@ -306,9 +323,7 @@ Panel {
             width: parent.width
             title: root.item ? Model.describe(root.item) : "Oculus"
             detail: root.trackedLabel
-            meta: root.item ? root.item.url
-              : root.unusable ? "Not a GitHub or Codeberg project or user page"
-              : "Copy a GitHub or Codeberg URL (Alt+Shift+L in Chromium), then press p"
+            meta: root.item ? root.item.url : root.emptyReason
             foreground: root.foreground
             fontFamily: root.fontFamily
             iconOpacity: root.item ? 1.0 : 0.5
@@ -351,7 +366,7 @@ Panel {
             font.pixelSize: Style.font.body * 0.8
             readonly property int keyed: root.actions.filter(function(a) { return a.key !== "" }).length
             text: (keyed > 1 ? "1–" + keyed + " act · " : keyed === 1 ? "1 act · " : "")
-              + "p re-read clipboard · o open Oculus"
+              + "o open Oculus"
           }
         }
       }

@@ -2,17 +2,17 @@
   "schemaVersion": 1,
   "id": "andrewgilley.oculus",
   "name": "Oculus",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "Andrew Gilley",
   "license": "MIT",
-  "description": "Recognises the GitHub/Codeberg project or user on your clipboard, shows whether oculus.nvim already tracks it, and tracks, opens or inspects it from the Omarchy bar.",
+  "description": "Recognises the GitHub/Codeberg project or user open in your browser, shows whether oculus.nvim already tracks it, and tracks, opens or inspects it from the Omarchy bar.",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "Panel.qml"
   },
   "barWidget": {
     "displayName": "Oculus",
-    "description": "Copy a GitHub/Codeberg URL, open the panel: it says whether you already track that project or user, and offers to track them, open their feeds, or inspect a PR, issue or commit.",
+    "description": "Open the panel on a GitHub/Codeberg page: it says whether you already track that project or user, and offers to track them, open their feeds, or inspect a PR, issue or commit.",
     "category": "Development",
     "aliases": ["oculus", "neovim", "github", "codeberg"],
     "allowMultiple": false,

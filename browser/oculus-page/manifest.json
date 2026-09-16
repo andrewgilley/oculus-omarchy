@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Oculus Page",
+  "version": "0.4.0",
+  "description": "Tells the Omarchy Oculus bar widget which GitHub or Codeberg page is open. It can only see pages on those two sites.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5y1DK1cJzeUWsiAgYaYBOzJdVGeQVOqb2mNvvS2RJYKqLPJRZaRjj/E6ELFJFU6bqGnR1YLiSnsMiSbdcPgm1oek/l3R2WrQ7vsUzl/l6YcSeFR/hhvB0G9+6wq3/COnITAX3nFkU4quc7XfUcb4v7qSr0m960l9nGnC0fWBQki+yTfBOetdmDol+mXSs3fuZuwZ4LzxtzwmPUtu+t9ouO0pYRYb+1cvwNeKqVTz+2js3R09wyGJhueqeolN1pYrk8RYhaYeSPw4jSP9oPIWf1bKlhBRBt/HhUTDFRt0wn9vsF+qJ1G3L6bxZ4Yn3qrD60WzbgouvApObN0T7GZzuwIDAQAB",
+  "permissions": ["nativeMessaging"],
+  "host_permissions": ["https://github.com/*", "https://www.github.com/*", "https://codeberg.org/*"],
+  "background": { "service_worker": "background-1.js" }
+}

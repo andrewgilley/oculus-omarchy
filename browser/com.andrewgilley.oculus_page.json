@@ -1,0 +1,9 @@
+{
+  "name": "com.andrewgilley.oculus_page",
+  "description": "Oculus: records the GitHub/Codeberg page open in the browser for the Omarchy bar widget",
+  "path": "__HOST_PATH__",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://anhdkdnknhlmilldenkgfjapclmpohea/"
+  ]
+}

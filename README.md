@@ -13,7 +13,11 @@ copy it into `OculusMark` in `Panel.qml` to change both.
 
 ## How it works
 
-When the panel opens it reads the clipboard and recognises:
+The Oculus Page browser extension (`browser/oculus-page`) reports the active
+tab of the browser window you last used whenever it changes, through a native
+messaging host (`browser/oculus-page-host`) that writes
+`~/.local/state/oculus/browser.json`. The panel watches that file, so it knows
+the page you're on with nothing to copy. It recognises:
 
 | URL                                         | Actions                                            |
 |---------------------------------------------|----------------------------------------------------|
@@ -24,6 +28,13 @@ When the panel opens it reads the clipboard and recognises:
 Codeberg URLs work the same (`codeberg.org/owner/repo/pulls/N`). Forge pages
 like `github.com/settings`, and anything that isn't a forge URL, are ignored —
 the panel says so instead of offering actions.
+
+- **Only GitHub and Codeberg are visible.** The extension's host permissions
+  cover `github.com` and `codeberg.org` and nothing else, so Chromium never
+  hands it the URL of any other page; those are recorded as an empty URL.
+- The page stays current while the panel is open: switch tabs and it follows.
+  If the browser has quit since, the panel says so rather than showing the last
+  page.
 
 - **Already tracking it?** The hero carries a *Tracked* / *Not tracked* pill
   for the thing the page is about, and any row whose target is already in the
@@ -48,6 +59,7 @@ the panel says so instead of offering actions.
 - [Omarchy] (https://omarchy.org) 
 - [oculus.nvim] (https://github.com/andrewgilley/oculus.nvim) 
 - [Ghostty] (https://github.com/ghostty-org/ghostty)
+- Chromium, or another Chromium-based browser with a `~/.config/<browser>-flags.conf`
 
 ## Setup
 
@@ -74,9 +86,13 @@ the panel says so instead of offering actions.
 
    This validates the plugin, copies it to
    `~/.config/omarchy/plugins/andrewgilley.oculus/`, and links `oculus-open`
-   and `oculus-track` into `~/.local/bin`. It also removes the links left by
-   0.2 (`oculus-activity`, `oculus-open-project`).
-3. `omarchy bar put andrewgilley.oculus`.
+   and `oculus-track` into `~/.local/bin`. It registers `oculus-page-host` as a
+   native messaging host and adds `browser/oculus-page` to the
+   `--load-extension` line of your browser's flags file, the way Omarchy loads
+   its own extensions. It also removes the links left by 0.2
+   (`oculus-activity`, `oculus-open-project`).
+3. Restart the browser so it loads the extension.
+4. `omarchy bar put andrewgilley.oculus`.
 
 After a lazy.nvim update, run `install.sh` again to pick up widget changes.
 
@@ -101,20 +117,19 @@ Point lazy.nvim at your clone instead, and run `./install.sh` from it:
 
 | Where      | Action                                                          |
 |------------|-----------------------------------------------------------------|
-| Chromium   | `Alt+Shift+L` copies the current URL (Omarchy's Copy URL extension) |
-| Bar        | left: popout · middle: `:OculusOpen`                            |
-| Panel keys | `1`–`n` run an action · Enter runs the first · `p` re-read the clipboard · `o` open Oculus |
+| Bar        | left: popout on the current page · middle: `:OculusOpen`        |
+| Panel keys | `1`–`n` run an action · Enter runs the first · `o` open Oculus  |
 | Tracked    | dimmed row, ✓ instead of a number — it's already in the tracking file |
-| IPC        | `omarchy-shell andrewgilley.oculus item <url>` opens the panel on a URL; also `toggle`, `status` |
+| IPC        | `omarchy-shell andrewgilley.oculus toggle` opens the panel on the current page; `item <url>` on any URL; `status` |
 | CLI        | `oculus-open inspect <url>` · `oculus-open project github:owner/repo` · `oculus-open user github:login` · `oculus-track github owner/repo` · `oculus-track codeberg login` |
 
 To get from a page to the panel in one key press, bind the IPC call to a key
-in Hyprland. It opens the panel on whatever URL is on the clipboard:
+in Hyprland:
 
 ```lua
 -- ~/.config/hypr/bindings.lua
-o.bind("SUPER + ALT + O", "Oculus: act on copied URL",
-  [[sh -c 'omarchy-shell andrewgilley.oculus item "$(wl-paste -n)"']])
+o.bind("SUPER + ALT + O", "Oculus: act on this page",
+  [[omarchy-shell andrewgilley.oculus toggle]])
 ```
 
 ## Debugging
@@ -129,6 +144,11 @@ o.bind("SUPER + ALT + O", "Oculus: act on copied URL",
 - Tracking errors show in the panel. Run `oculus-track github owner/repo` in
   a terminal to see the full message.
 - Bridge: `jq . ~/.local/state/oculus/omarchy.json`.
+- Browser page: `jq . ~/.local/state/oculus/browser.json` should change as you
+  switch tabs. If the file never appears, check that `chrome://extensions`
+  lists *Oculus Page* (restart the browser after `install.sh`) and that the
+  host manifest in `~/.config/chromium/NativeMessagingHosts/` points at
+  `oculus-page-host`; the extension's service worker console shows host errors.
 - Hyprland 0.56+ uses a Lua config, so `hyprctl dispatch` takes a Lua
   expression: `hyprctl dispatch 'hl.dsp.focus({ workspace = "emptym" })'`.
   The old `hyprctl dispatch workspace emptym` fails (exit 7). Trace the
