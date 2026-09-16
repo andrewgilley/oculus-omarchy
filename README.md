@@ -45,13 +45,9 @@ the panel says so instead of offering actions.
 
 ## Requirements
 
-- [Omarchy](https://omarchy.org) with its Quickshell-based shell, on
-  Hyprland 0.56 or newer (the launcher uses its Lua `hyprctl dispatch` syntax).
-- [oculus.nvim](https://github.com/andrewgilley/oculus.nvim) with `open_user`
-  (`:OculusOpen @login`), installed with lazy.nvim and configured with a
-  [tracking file](https://github.com/andrewgilley/oculus.nvim/blob/main/docs/tracking.md):
-  `tracking_file = vim.fn.expand("~/.config/oculus/tracking.json")`.
-- Ghostty as your default terminal (Omarchy's default), and `wl-clipboard`.
+- [Omarchy] (https://omarchy.org) 
+- [oculus.nvim] (https://github.com/andrewgilley/oculus.nvim) 
+- [Ghostty] (https://github.com/ghostty-org/ghostty)
 
 ## Setup
 
@@ -139,13 +135,3 @@ o.bind("SUPER + ALT + O", "Oculus: act on copied URL",
   launcher with `bash -x ~/.local/bin/oculus-open project github:owner/repo`.
 - Ghostty's `-e` silently drops arguments starting with `+` (it reserves them
   for its own `+actions`), so pass Neovim commands as `-c "…"`, never `+…`.
-
-## TODO
-
-- Read the URL straight from the focused browser tab instead of the
-  clipboard (Chromium doesn't expose it without a native-messaging host).
-- Choose a group when tracking, instead of the list root.
-- Untrack from the panel, not just track.
-- Send inspect/open to the running Neovim and focus its terminal, instead of
-  starting a new one.
-- Arrow-key cursor over the panel rows.
