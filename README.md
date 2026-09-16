@@ -6,41 +6,12 @@ the project or user the page is about, tells you whether Oculus already tracks
 it, and offers to track it, open its activity feed, or inspect a pull request,
 issue or commit.
 
-```
-oculus-omarchy/
-├── oculus/                          # Omarchy plugin (id: andrewgilley.oculus)
-│   ├── manifest.json                # bar-widget manifest + settings schema
-│   ├── Panel.qml                    # bar icon, popout with the current page's actions
-│   └── Model.js                     # URL parsing, tracking file, action list
-├── nvim/
-│   ├── bin/oculus-open              # new Ghostty + Neovim running an Oculus command
-│   ├── bin/oculus-track             # add to tracking.json (nvim -l)
-│   └── lua/oculus_omarchy/
-│       ├── init.lua                 # bridge: publishes this Neovim's RPC socket
-│       └── track.lua                # tracking-file edits via oculus.tracking
-├── assets/
-│   ├── omarchy-plugin-icon.svg      # the mark Panel.qml draws (nested squares)
-│   └── omarchy-glyph-source.svg     # same path at 1000×1000, for an icon-font glyph
-└── install.sh
-```
-
 The bar icon and the panel's hero mark are the `assets/omarchy-plugin-icon.svg`
 path drawn with `QtQuick.Shapes`, so they take the bar's foreground colour at
 any size instead of depending on an icon font. Change the path in the SVG and
 copy it into `OculusMark` in `Panel.qml` to change both.
 
 ## How it works
-
-```
-Chromium ── Alt+Shift+L (copy URL) ──▶ clipboard ──wl-paste──▶ Panel.qml
-                                                                 │ parse URL
-         ┌───────────────────────────────────────────────────────┤
-         ▼                                                       ▼
-oculus-open inspect|project|user                    oculus-track github owner/repo
-  Ghostty + nvim -c "OculusInspect <url>"             oculus.tracking.mutate → tracking.json
-                    "OculusOpen github:o/r"           then RPC → running nvim:
-                    "OculusOpen @github:login"          require("oculus").reload_tracking()
-```
 
 When the panel opens it reads the clipboard and recognises:
 
