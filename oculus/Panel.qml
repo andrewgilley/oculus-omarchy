@@ -350,7 +350,7 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     // Narrow with no page to act on: just the mark and what a click does.
-    contentWidth: panel.fittedContentWidth(Style.space(root.item ? 380 : 240))
+    contentWidth: panel.fittedContentWidth(Style.space(root.item ? 380 : 340))
     contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(520))
 
     PanelKeyCatcher {
@@ -412,12 +412,13 @@ Panel {
           Text {
             visible: root.item === null
             width: parent.width
-            topPadding: Style.space(4)
+            topPadding: Style.space(14)
+            bottomPadding: Style.space(10)
+            lineHeight: 1.3
             wrapMode: Text.Wrap
             color: root.dim
             font.family: root.fontFamily
-            font.pixelSize: Style.font.body * 0.85
-            text: (root.emptyReason !== "" ? root.emptyReason + "\n\n" : "") + "Click to open Oculus\nRight-click to close"
+            text: (root.emptyReason !== "" ? root.emptyReason + "\n\n" : "") + "Click to open Oculus in Neovim\nRight-click to close"
           }
 
           Repeater {
