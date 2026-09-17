@@ -55,7 +55,9 @@ Panel {
   readonly property var browser: Model.parseBrowser(browserText)
   readonly property string pageUrl: pinnedText || (browserAlive ? browser.url : "")
   readonly property var item: Model.parseUrl(pageUrl)
-  readonly property var actions: Model.actionsFor(item, tracking)
+  // With no page to act on, the panel just offers Oculus itself.
+  readonly property var actions: item ? Model.actionsFor(item, tracking)
+    : [{ id: "oculus", label: "Open Oculus", hint: nvim.live ? "in your Neovim" : "in a new terminal", key: "" }]
   // "Tracked" / "Not tracked" for the hero pill; "" when there's nothing to act on.
   readonly property string trackedLabel: Model.trackedLabel(item, tracking)
   // What's stopping Oculus from reading the page, for the hero; "" otherwise.
@@ -122,7 +124,9 @@ Panel {
   }
 
   function run(action) {
-    if (!action || action.done || !item) return
+    if (!action || action.done) return
+    if (action.id === "oculus") return openOculus()
+    if (!item) return
     switch (action.id) {
       case "inspect": launch("inspect", item.url); break
       case "project": launch("project", Model.projectTarget(item)); break
@@ -242,7 +246,7 @@ Panel {
     }
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.MiddleButton) root.openOculus()
-      else if (buttonCode === Qt.RightButton) root.browseTracked()
+      else if (buttonCode === Qt.RightButton) root.opened ? root.close() : root.browseTracked()
       else root.toggle()
     }
   }
@@ -467,6 +471,7 @@ Panel {
           }
 
           Text {
+            visible: root.item !== null
             width: parent.width
             topPadding: Style.space(4)
             color: root.dim
