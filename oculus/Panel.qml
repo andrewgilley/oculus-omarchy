@@ -58,12 +58,11 @@ Panel {
   readonly property var actions: Model.actionsFor(item, tracking)
   // "Tracked" / "Not tracked" for the hero pill; "" when there's nothing to act on.
   readonly property string trackedLabel: Model.trackedLabel(item, tracking)
-  // Why there's nothing to act on, for the hero; "" when there is.
+  // What's stopping Oculus from reading the page, for the hero; "" otherwise.
   readonly property string emptyReason: item !== null ? ""
-    : pageUrl !== "" ? "This GitHub or Codeberg page isn't a project or user"
     : !browser.ok ? "Run install.sh and restart the browser to load the Oculus Page extension"
     : !browserAlive ? "The browser isn't open"
-    : "The browser isn't on a GitHub or Codeberg page"
+    : ""
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color dim: Qt.darker(foreground, 1.55)
@@ -364,7 +363,6 @@ Panel {
         var action = Model.actionForKey(root.actions, t)
         if (action) root.run(action)
         else if (t === "o" || t === "O") root.openOculus()
-        else if (t === "/" || t === "s" || t === "S") root.browseTracked()
         else if (t === "q" || t === "Q") root.close()
       }
 
@@ -477,7 +475,7 @@ Panel {
             readonly property int keyed: root.actions.filter(function(a) { return a.key !== "" }).length
             text: root.pick ? "↑↓ select · ↵ choose · Esc back"
               : (keyed > 1 ? "1–" + keyed + " act · " : keyed === 1 ? "1 act · " : "")
-              + "/ search tracked · o open Oculus · q quit"
+              + "o open Oculus · q quit"
           }
         }
       }
