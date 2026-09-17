@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "andrewgilley.oculus",
   "name": "Oculus",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "author": "Andrew Gilley",
   "license": "MIT",
-  "description": "Recognises the GitHub/Codeberg project or user open in your browser, shows whether oculus.nvim already tracks it, and tracks, opens or inspects it from the Omarchy bar.",
+  "description": "Recognises the GitHub/Codeberg project or user open in your browser, shows whether oculus.nvim already tracks it and whether you have it cloned, and tracks, clones, opens or inspects it from the Omarchy bar.",
   "kinds": ["bar-widget", "overlay"],
   "keepLoaded": true,
   "entryPoints": {
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Oculus",
-    "description": "Open the panel on a GitHub/Codeberg page: it says whether you already track that project or user, and offers to track them, open their feeds, or inspect a PR, issue or commit.",
+    "description": "Open the panel on a GitHub/Codeberg page: it says whether you already track that project or user and whether it's in your source folder, and offers to track them, clone the project, open their feeds, or inspect a PR, issue or commit.",
     "category": "Development",
     "aliases": ["oculus", "neovim", "github", "codeberg"],
     "allowMultiple": false,
@@ -22,11 +22,13 @@
     "defaults": {
       "trackingFile": "",
       "stateDir": "",
+      "sourceDir": "",
       "staleAfterSec": 60
     },
     "schema": [
       { "key": "trackingFile", "type": "path", "label": "Tracking file", "defaultValue": "", "description": "Optional. Defaults to $XDG_CONFIG_HOME/oculus/tracking.json; must match oculus.nvim's tracking_file." },
       { "key": "stateDir", "type": "path", "label": "State folder", "defaultValue": "", "description": "Optional. Defaults to $XDG_STATE_HOME/oculus." },
+      { "key": "sourceDir", "type": "path", "label": "Source folder", "defaultValue": "", "description": "Where Clone puts local clones. Optional. Defaults to ~/Dev/source." },
       { "key": "staleAfterSec", "type": "integer", "label": "Treat Neovim as gone after (seconds)", "min": 10, "max": 3600, "step": 10, "defaultValue": 60 }
     ]
   }

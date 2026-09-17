@@ -1,0 +1,88 @@
+#!/bin/bash
+# Clone a GitHub/Codeberg project into your source folder, or report the clone
+# that's already there.
+#
+# Usage:
+#   oculus-clone --check --dir DIR <github|codeberg> <owner/repo>   what's at its path
+#   oculus-clone --dir DIR <github|codeberg> <owner/repo>           clone it there
+#
+# The clone goes to DIR/<repo>; a DIR/<owner>/<repo> already there counts too.
+# --check prints "<state>\t<path>", where the state is `clone` (that project is
+# already there), `other` (a different repository holds the path) or `none`.
+# Cloning prints the path and notifies when it finishes, since it runs detached
+# from the panel that started it.
+set -euo pipefail
+
+usage() {
+  sed -n '5,7p' "$0" | sed 's/^# //' >&2
+  exit 2
+}
+
+check=false
+dir=""
+while [[ ${1:-} == --* ]]; do
+  case "$1" in
+    --check) check=true; shift ;;
+    --dir) dir="${2:-}"; [[ -n $dir ]] || usage; shift 2 ;;
+    *) usage ;;
+  esac
+done
+
+provider="${1:-}"
+repository="${2:-}"
+[[ -n $dir ]] || usage
+[[ $provider == github || $provider == codeberg ]] || usage
+[[ $repository =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || usage
+
+owner="${repository%%/*}"
+name="${repository##*/}"
+dir="${dir/#\~/$HOME}"
+host=$([[ $provider == codeberg ]] && echo codeberg.org || echo github.com)
+
+# Is the checkout at $1 this project? Its origin ends in owner/repo, whether it
+# was cloned over HTTPS or SSH.
+is_clone() {
+  local remote pattern
+  remote=$(git -C "$1" remote get-url origin 2>/dev/null) || return 1
+  pattern="(^|[/:])${owner,,}/${name,,}(\.git)?/?$"
+  [[ ${remote,,} =~ $pattern ]]
+}
+
+state=none
+path="$dir/$name"
+for candidate in "$dir/$name" "$dir/$owner/$name"; do
+  [[ -e $candidate ]] || continue
+  if is_clone "$candidate"; then
+    state=clone
+    path="$candidate"
+    break
+  fi
+  [[ $candidate == "$dir/$name" ]] && state=other
+done
+
+if [[ $check == true ]]; then
+  printf '%s\t%s\n' "$state" "$path"
+  exit 0
+fi
+
+notify() {
+  command -v notify-send >/dev/null || return 0
+  notify-send -a Oculus "$1" "$2" || true
+}
+
+if [[ $state == clone ]]; then
+  printf '%s\n' "$path"
+  exit 0
+fi
+if [[ $state == other ]]; then
+  echo "$path already holds another repository" >&2
+  exit 1
+fi
+
+mkdir -p "$dir"
+if ! git clone "https://$host/$repository.git" "$path"; then
+  notify "Couldn't clone $repository" "git clone failed; run oculus-clone in a terminal to see why"
+  exit 1
+fi
+notify "Cloned $repository" "$path"
+printf '%s\n' "$path"

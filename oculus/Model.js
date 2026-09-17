@@ -170,13 +170,28 @@ function trackedLabel(item, tracking) {
   return isTracked(item, tracking) ? "Tracked" : "Not tracked"
 }
 
+// The clone row: offer to clone the project into the source folder, or say what
+// that folder already holds. `clone` is { state, path } from `oculus-clone
+// --check`, with `path` shortened for display.
+function cloneAction(item, clone) {
+  if (clone.state === "clone") {
+    return { id: "clone", label: "Cloned to " + clone.path, hint: "already in your source folder", done: true }
+  }
+  if (clone.state === "other") {
+    return { id: "clone", label: "Can't clone " + item.repository, hint: clone.path + " holds another repository",
+      done: true, badge: "!" }
+  }
+  return { id: "clone", label: "Clone " + item.repository, hint: "into " + clone.path }
+}
+
 // What the panel offers for an item: [{ id, label, hint, key, done }]. Tracking
 // leads, because recognising a trackable page is the point of the widget: every
 // repo page offers the project *and* its owner, and rows for things already in
 // the tracking file are dimmed, badged and do nothing. `key` is the digit that
 // runs the row; `done` rows have none, so the numbering stays 1..n over the
-// rows you can actually press.
-function actionsFor(item, tracking) {
+// rows you can actually press. `clone` adds the clone row when the source
+// folder has been looked at; leave it out and there is none.
+function actionsFor(item, tracking, clone) {
   if (!item) return []
   var actions = []
   var trackedRepo = item.repository && tracking.keys[projectKey(item.provider, item.repository)] === true
@@ -192,6 +207,7 @@ function actionsFor(item, tracking) {
       ? { id: "trackProject", label: "Tracking " + item.repository, hint: "already in your tracking file", done: true }
       : { id: "trackProject", label: "Track " + item.repository, hint: "choose a group and name" })
     actions.push({ id: "project", label: "Open " + item.repository + " activity", hint: "in Oculus" })
+    if (clone) actions.push(cloneAction(item, clone))
   }
 
   actions.push(trackedUser

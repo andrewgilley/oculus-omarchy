@@ -10,7 +10,7 @@ dest="$HOME/.config/omarchy/plugins/andrewgilley.oculus"
 omarchy-plugin-validate "$here/oculus"
 mkdir -p "$dest" "$HOME/.local/bin"
 cp -r "$here/oculus/." "$dest/"
-for bin in oculus-open oculus-track; do
+for bin in oculus-open oculus-track oculus-clone; do
   chmod +x "$here/nvim/bin/$bin"
   ln -sf "$here/nvim/bin/$bin" "$HOME/.local/bin/$bin"
 done
@@ -53,5 +53,5 @@ done
 
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 
-echo "Installed to $dest (scripts: ~/.local/bin/oculus-open, ~/.local/bin/oculus-track)"
+echo "Installed to $dest (scripts: ~/.local/bin/oculus-{open,track,clone})"
 echo "Add it to the bar:  omarchy bar put andrewgilley.oculus   (or edit ~/.config/omarchy/shell.json)"

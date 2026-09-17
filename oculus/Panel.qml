@@ -19,6 +19,7 @@ import "Model.js" as Model
 //
 //   oculus-open  <inspect|project|user|oculus> [target]   new Ghostty + Neovim
 //   oculus-track [--group G] [--name N] <github|codeberg> <owner/repo|login>
+//   oculus-clone [--check] --dir DIR <github|codeberg> <owner/repo>
 //
 // Tracking asks, in the panel, which group to put the entry in and what to call it.
 Panel {
@@ -31,6 +32,7 @@ Panel {
   readonly property string stateDir: setting("stateDir", "") || ((Quickshell.env("XDG_STATE_HOME") || (home + "/.local/state")) + "/oculus")
   readonly property string trackingPath: setting("trackingFile", "") || ((Quickshell.env("XDG_CONFIG_HOME") || (home + "/.config")) + "/oculus/tracking.json")
   readonly property string binDir: home + "/.local/bin"
+  readonly property string sourceDir: setting("sourceDir", "") || (home + "/Dev/source")
   readonly property int staleAfterSec: setting("staleAfterSec", 60)
 
   property string snapshotText: ""
@@ -41,6 +43,11 @@ Panel {
   // Set by the `item` IPC call; wins over the browser page until the panel closes.
   property string pinnedText: ""
   property string lastError: ""
+  // What the source folder holds for a project, from `oculus-clone --check`:
+  // { target, state: clone | other | none, path }. Kept keyed to the target it
+  // was asked about, so a reply that lands after the page changed is ignored.
+  property var cloneState: null
+  property string cloneStatus: ""
   // Set while a Track row asks where the entry goes and what to call it:
   // { list, provider, identity, label, step: group | name, path }.
   property var pick: null
@@ -55,7 +62,10 @@ Panel {
   readonly property var browser: Model.parseBrowser(browserText)
   readonly property string pageUrl: pinnedText || (browserAlive ? browser.url : "")
   readonly property var item: Model.parseUrl(pageUrl)
-  readonly property var actions: Model.actionsFor(item, tracking)
+  // The check's answer, but only while it still describes the page's project.
+  readonly property var clone: item && item.kind !== "user" && cloneState
+    && cloneState.target === Model.projectTarget(item) ? cloneState : null
+  readonly property var actions: Model.actionsFor(item, tracking, clone)
   // "Tracked" / "Not tracked" for the hero pill; "" when there's nothing to act on.
   readonly property string trackedLabel: Model.trackedLabel(item, tracking)
   // What's stopping Oculus from reading the page, for the hero; "" otherwise.
@@ -67,6 +77,29 @@ Panel {
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
+
+  function shorten(path) {
+    return path.indexOf(home + "/") === 0 ? "~" + path.slice(home.length) : path
+  }
+
+  // Ask what the source folder already has for this project, so the clone row
+  // can say. Cheap enough to redo whenever the page changes while we're open.
+  function checkClone() {
+    if (!item || item.kind === "user" || cloneCheck.running) return
+    cloneCheck.target = Model.projectTarget(item)
+    cloneCheck.command = [binDir + "/oculus-clone", "--check", "--dir", sourceDir, item.provider, item.repository]
+    cloneCheck.running = true
+  }
+
+  // Clone in the background: git keeps going with the panel closed, and
+  // oculus-clone notifies when it lands.
+  function startClone() {
+    if (cloner.running || !item || item.kind === "user") return
+    lastError = ""
+    cloneStatus = "Cloning " + item.repository + " into " + shorten(sourceDir) + "\u2026"
+    cloner.command = [binDir + "/oculus-clone", "--dir", sourceDir, item.provider, item.repository]
+    cloner.running = true
+  }
 
   function launch(action, target) {
     Quickshell.execDetached(target ? [binDir + "/oculus-open", action, target] : [binDir + "/oculus-open", action])
@@ -127,6 +160,7 @@ Panel {
       case "inspect": launch("inspect", item.url); break
       case "project": launch("project", Model.projectTarget(item)); break
       case "user": launch("user", Model.userTarget(item)); break
+      case "clone": startClone(); break
       case "trackProject": startPick("projects", item.repository, item.repository); break
       case "trackUser": startPick("users", item.owner, "@" + item.owner); break
     }
@@ -164,13 +198,17 @@ Panel {
   onOpenedChanged: {
     if (opened) {
       checkBrowser()
+      checkClone()
       Qt.callLater(function() { keyCatcher.forceActiveFocus() })
     } else {
       if (pick) endPick()
       pinnedText = ""
       lastError = ""
+      if (!cloner.running) cloneStatus = ""
     }
   }
+
+  onItemChanged: if (opened) checkClone()
 
   FileView {
     path: root.stateDir + "/omarchy.json"
@@ -202,6 +240,35 @@ Panel {
   Process {
     id: browserCheck
     onExited: function(exitCode) { root.browserAlive = exitCode === 0 }
+  }
+
+  Process {
+    id: cloneCheck
+    property string target: ""
+    stdout: StdioCollector { id: cloneCheckOut }
+    onExited: function(exitCode) {
+      var parts = cloneCheckOut.text.trim().split("\t")
+      root.cloneState = exitCode === 0 && parts.length === 2
+        ? { target: cloneCheck.target, state: parts[0], path: root.shorten(parts[1]) } : null
+      // The page can change while the check runs; ask again for the new one.
+      if (root.opened && root.item && root.item.kind !== "user"
+        && Model.projectTarget(root.item) !== cloneCheck.target) root.checkClone()
+    }
+  }
+
+  Process {
+    id: cloner
+    stdout: StdioCollector { id: cloneOut }
+    stderr: StdioCollector { id: cloneErr }
+    onExited: function(exitCode) {
+      if (exitCode === 0) {
+        root.cloneStatus = "Cloned to " + root.shorten(cloneOut.text.trim())
+      } else {
+        root.cloneStatus = ""
+        root.lastError = cloneErr.text.trim().split("\n").pop() || ("oculus-clone exited " + exitCode)
+      }
+      root.checkClone()
+    }
   }
 
   Process {
@@ -428,8 +495,9 @@ Panel {
               required property var modelData
               label: modelData.label
               hint: modelData.hint || ""
-              badge: modelData.done === true ? "\u2713" : modelData.key
+              badge: modelData.badge || (modelData.done === true ? "\u2713" : modelData.key)
               dimmed: modelData.done === true || (tracker.running && modelData.id.indexOf("track") === 0)
+                || (cloner.running && modelData.id === "clone")
               onActivated: root.run(modelData)
             }
           }
@@ -481,14 +549,17 @@ Panel {
           }
 
           Text {
-            visible: root.lastError !== "" || (!root.tracking.ok && root.item !== null)
+            visible: text !== ""
             width: parent.width
             wrapMode: Text.WordWrap
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.body * 0.85
             text: root.lastError !== "" ? root.lastError
-              : "No tracking file at " + root.trackingPath + ". Create it with {\"version\": 1, \"projects\": [], \"users\": []} to track from here."
+              : root.cloneStatus !== "" ? root.cloneStatus
+              : !root.tracking.ok && root.item !== null
+              ? "No tracking file at " + root.trackingPath + ". Create it with {\"version\": 1, \"projects\": [], \"users\": []} to track from here."
+              : ""
           }
 
           Text {
