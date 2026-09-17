@@ -418,6 +418,7 @@ Panel {
             wrapMode: Text.Wrap
             color: root.dim
             font.family: root.fontFamily
+            font.pixelSize: Style.font.body * 0.85
             text: (root.emptyReason !== "" ? root.emptyReason + "\n\n" : "") + "Click to open Oculus in Neovim\nRight-click to close"
           }
 
