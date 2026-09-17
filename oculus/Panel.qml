@@ -349,7 +349,8 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(380))
+    // Narrow with no page to act on: just the mark and what a click does.
+    contentWidth: panel.fittedContentWidth(Style.space(root.item ? 380 : 240))
     contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(520))
 
     PanelKeyCatcher {
@@ -376,13 +377,15 @@ Panel {
         interactive: contentHeight > height
         QQC.ScrollBar.vertical: QQC.ScrollBar { policy: QQC.ScrollBar.AsNeeded }
 
-        // With no page to act on, a click anywhere in the panel opens Oculus.
+        // With no page to act on, a click anywhere in the panel opens Oculus
+        // and a right-click closes it.
         MouseArea {
           visible: root.item === null
           width: parent.width
           height: Math.max(column.implicitHeight, flick.height)
+          acceptedButtons: Qt.LeftButton | Qt.RightButton
           cursorShape: Qt.PointingHandCursor
-          onClicked: root.openOculus()
+          onClicked: function(mouse) { mouse.button === Qt.RightButton ? root.close() : root.openOculus() }
         }
 
         Column {
@@ -394,7 +397,7 @@ Panel {
             width: parent.width
             title: root.item ? Model.describe(root.item) : "Oculus"
             detail: root.trackedLabel
-            meta: root.item ? root.item.url : root.emptyReason
+            meta: root.item ? root.item.url : ""
             foreground: root.foreground
             fontFamily: root.fontFamily
             iconOpacity: root.item ? 1.0 : 0.5
@@ -404,6 +407,17 @@ Panel {
                 color: root.foreground
               }
             }
+          }
+
+          Text {
+            visible: root.item === null
+            width: parent.width
+            topPadding: Style.space(4)
+            wrapMode: Text.Wrap
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body * 0.85
+            text: (root.emptyReason !== "" ? root.emptyReason + "\n\n" : "") + "Click to open Oculus\nRight-click to close"
           }
 
           Repeater {
