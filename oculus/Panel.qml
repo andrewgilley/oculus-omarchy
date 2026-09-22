@@ -143,7 +143,7 @@ Panel {
     var target = pick
     endPick()
     tracker.command = [binDir + "/oculus-track", "--file", trackingPath, "--group", JSON.stringify(target.path)]
-      .concat(row.name ? ["--name", row.name] : [], [target.provider, target.identity])
+      .concat(row.name ? ["--name", row.name] : [], target.directoryPath ? ["--path", target.directoryPath] : [], [target.provider, target.identity])
     tracker.running = true
   }
 
@@ -162,6 +162,10 @@ Panel {
       case "user": launch("user", Model.userTarget(item)); break
       case "clone": startClone(); break
       case "trackProject": startPick("projects", item.repository, item.repository); break
+      case "trackDirectory":
+        startPick("projects", item.repository, item.repository + "/" + item.path)
+        pick = Object.assign({}, pick, { directoryPath: item.path })
+        break
       case "trackUser": startPick("users", item.owner, "@" + item.owner); break
     }
   }

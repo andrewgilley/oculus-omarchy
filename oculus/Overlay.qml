@@ -179,11 +179,16 @@ Item {
       case "trackProject":
         root.pickGroup({ op: "add", list: "projects", provider: item.provider, identity: item.repository, label: item.repository })
         break
+      case "trackDirectory":
+        root.pickGroup({ op: "add", list: "projects", provider: item.provider, identity: item.repository,
+          directoryPath: item.path, label: item.repository + "/" + item.path })
+        break
       case "trackUser":
         root.pickGroup({ op: "add", list: "users", provider: item.provider, identity: item.owner, label: "@" + item.owner })
         break
       case "move":
-        root.pickGroup({ op: "move", list: row.list, provider: item.provider, identity: row.identity, label: row.label, group: row.group })
+        root.pickGroup({ op: "move", list: row.list, provider: item.provider, identity: row.identity,
+          directoryPath: row.path, label: row.label, group: row.group })
         break
       case "untrack": root.requestUntrack(row); break
     }
@@ -212,7 +217,8 @@ Item {
       return
     }
     root.leaveGroupPicker()
-    root.track(["--move", JSON.stringify(row.path), target.provider, target.identity], "Moving " + target.label + "…")
+    root.track(["--move", JSON.stringify(row.path)].concat(target.directoryPath ? ["--path", target.directoryPath] : [],
+      [target.provider, target.identity]), "Moving " + target.label + "…")
   }
 
   function chooseName(row) {
@@ -220,7 +226,8 @@ Item {
     if (!row || !target) return
     var args = ["--group", JSON.stringify(target.path)].concat(row.name ? ["--name", row.name] : [])
     root.leaveGroupPicker()
-    root.track(args.concat([target.provider, target.identity]), "Tracking " + target.label + "…")
+    root.track(args.concat(target.directoryPath ? ["--path", target.directoryPath] : [],
+      [target.provider, target.identity]), "Tracking " + target.label + "…")
   }
 
   function backToGroups() {
@@ -239,7 +246,8 @@ Item {
     var row = root.untrackRow
     root.untrackConfirmOpen = false
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
-    if (row) root.track(["--remove", row.item.provider, row.identity], "Untracking " + row.label + "…")
+    if (row) root.track(["--remove"].concat(row.path ? ["--path", row.path] : [],
+      [row.item.provider, row.identity]), "Untracking " + row.label + "…")
   }
 
   function cancelUntrack() {

@@ -4,7 +4,7 @@
 #
 # Usage:
 #   oculus-open inspect <https://github.com/owner/repo/{pull,issues,commit}/ID>
-#   oculus-open project <github:owner/repo | codeberg:owner/repo>
+#   oculus-open project <github:owner/repo[/directory] | codeberg:owner/repo>
 #   oculus-open user    <github:login | codeberg:login>
 #   oculus-open oculus
 set -euo pipefail
@@ -25,7 +25,7 @@ case "$action" in
     command="OculusInspect $target"
     ;;
   project)
-    [[ $target =~ ^(github|codeberg):[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || usage
+    [[ $target =~ ^github:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$|^codeberg:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || usage
     command="OculusOpen $target"
     ;;
   user)

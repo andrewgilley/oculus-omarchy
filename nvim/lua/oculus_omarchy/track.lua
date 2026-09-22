@@ -29,20 +29,21 @@ local function read_json(file)
   return ok and type(data) == "table" and data or nil
 end
 
-local function matches(node, provider, field, value)
+local function matches(node, provider, field, value, path)
   return type(node[field]) == "string"
     and node[field]:lower() == value:lower()
     and (node.provider or "github") == provider
+    and (node.path or ""):lower() == (path or ""):lower()
 end
 
 -- Identities are unique per provider across a whole list, groups included.
-local function contains(nodes, provider, field, value)
+local function contains(nodes, provider, field, value, path)
   for _, node in ipairs(nodes) do
     if type(node.children) == "table" then
-      if contains(node.children, provider, field, value) then
+      if contains(node.children, provider, field, value, path) then
         return true
       end
-    elseif matches(node, provider, field, value) then
+    elseif matches(node, provider, field, value, path) then
       return true
     end
   end
@@ -51,15 +52,15 @@ local function contains(nodes, provider, field, value)
 end
 
 -- Detach the leaf for provider/value from wherever it sits and return it.
-local function take(nodes, provider, field, value)
+local function take(nodes, provider, field, value, path)
   for index, node in ipairs(nodes) do
     if type(node.children) == "table" then
-      local found = take(node.children, provider, field, value)
+      local found = take(node.children, provider, field, value, path)
 
       if found then
         return found
       end
-    elseif matches(node, provider, field, value) then
+    elseif matches(node, provider, field, value, path) then
       return table.remove(nodes, index)
     end
   end
@@ -127,7 +128,7 @@ end
 
 -- Load the tracking file, apply edit(tree, list, field, label), save and tell
 -- a running Neovim. edit returns false plus a message to stop without saving.
-local function edit(provider, identity, file, fn)
+local function edit(provider, identity, file, path, fn)
   if provider ~= "github" and provider ~= "codeberg" then
     return false, "provider must be github or codeberg"
   end
@@ -150,9 +151,12 @@ local function edit(provider, identity, file, fn)
   end
 
   local is_project = identity:find("/", 1, true) ~= nil
+  if path and (provider ~= "github" or not is_project) then
+    return false, "--path requires a GitHub project"
+  end
   local list = is_project and "projects" or "users"
   local field = is_project and "repository" or "username"
-  local label = is_project and identity or ("@" .. identity)
+  local label = (is_project and identity or ("@" .. identity)) .. (path and ("/" .. path) or "")
   local message = nil
 
   local saved, save_err = tracking.mutate(config, function(tree)
@@ -175,20 +179,20 @@ end
 -- provider: "github" | "codeberg"; identity: "owner/repo" or "login";
 -- group: path of group names ({} or nil for the list root); name: the display
 -- name Oculus shows (nil leaves it unset, so Oculus falls back to the identity).
-function M.add(provider, identity, file, group, name)
-  return edit(provider, identity, file, function(nodes, field, label)
-    if contains(nodes, provider, field, identity) then
+function M.add(provider, identity, file, group, name, path)
+  return edit(provider, identity, file, path, function(nodes, field, label)
+    if contains(nodes, provider, field, identity, path) then
       return true, "already tracking " .. label
     end
 
-    table.insert(group_children(nodes, group or {}), { [field] = identity, provider = provider, name = name })
+    table.insert(group_children(nodes, group or {}), { [field] = identity, provider = provider, name = name, path = path })
     return true, "tracking " .. label .. (name and name ~= identity and (" as " .. name) or "")
   end)
 end
 
-function M.remove(provider, identity, file)
-  return edit(provider, identity, file, function(nodes, field, label)
-    if not take(nodes, provider, field, identity) then
+function M.remove(provider, identity, file, path)
+  return edit(provider, identity, file, path, function(nodes, field, label)
+    if not take(nodes, provider, field, identity, path) then
       return false, "not tracking " .. label
     end
 
@@ -197,9 +201,9 @@ function M.remove(provider, identity, file)
 end
 
 -- Append the entry to the end of the group at path.
-function M.move(provider, identity, group, file)
-  return edit(provider, identity, file, function(nodes, field, label)
-    local node = take(nodes, provider, field, identity)
+function M.move(provider, identity, group, file, path)
+  return edit(provider, identity, file, path, function(nodes, field, label)
+    local node = take(nodes, provider, field, identity, path)
 
     if not node then
       return false, "not tracking " .. label

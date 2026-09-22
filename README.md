@@ -22,6 +22,7 @@ the page you're on with nothing to copy. It recognises:
 | URL                                         | Actions                                            |
 |---------------------------------------------|----------------------------------------------------|
 | `github.com/owner/repo` (any page under it) | **track the project** · open its activity · **clone it** · **track the owner** · open the owner's activity |
+| `github.com/owner/repo/tree/branch/path/to/dir` | **track the directory** separately, plus the repository and owner actions |
 | `github.com/owner/repo/pull/N`, `/issues/N`, `/commit/SHA` | **inspect** in Oculus, plus everything above |
 | `github.com/login`, `github.com/orgs/login` | **track the user** · open their activity           |
 
@@ -41,6 +42,9 @@ the panel says so instead of offering actions.
   tracking file reads *Tracking …*, is dimmed, and carries a ✓ instead of a
   number. The number keys only ever count the rows you can actually press, so
   `1`–`n` stay in step as things become tracked.
+- On a GitHub directory page, tracking the directory saves its path from the
+  repository root. The branch in the URL must be one path segment. The parent
+  repository and other directories remain separate entries.
 - Every repo page offers its **owner** as well as the project, so you can pick
   up a user you follow from any page of one of their repos.
 - **Got it locally?** Every repo page checks your source folder
@@ -160,7 +164,7 @@ starting query: `omarchy-shell shell summon andrewgilley.oculus '{"query": "zig"
 | Overlay keys | type to search · ↑↓ select · Enter runs the first action · Tab into the actions · Alt+Enter open in browser · Del untrack · Ctrl+V paste · Esc clear, back, close |
 | Tracked    | dimmed row, ✓ instead of a number — it's already in the tracking file, or already cloned |
 | IPC        | `omarchy-shell andrewgilley.oculus toggle` opens the panel on the current page; `item <url>` on any URL; `status` · `omarchy-shell shell toggle andrewgilley.oculus '{}'` the overlay |
-| CLI        | `oculus-open inspect <url>` · `oculus-open project github:owner/repo` · `oculus-open user github:login` · `oculus-track github owner/repo` · `oculus-track codeberg login` · `oculus-track --group /Editors/ --name Name github owner/repo` · `oculus-track --move / github owner/repo` · `oculus-track --remove github owner/repo` · `oculus-clone --dir ~/Dev/source github owner/repo` · `oculus-clone --check --dir ~/Dev/source github owner/repo` |
+| CLI        | `oculus-open inspect <url>` · `oculus-open project github:owner/repo[/directory]` · `oculus-open user github:login` · `oculus-track github owner/repo` · `oculus-track --path crates/gpui github zed-industries/zed` · `oculus-track codeberg login` · `oculus-track --group /Editors/ --name Name github owner/repo` · `oculus-track --move / github owner/repo` · `oculus-track --remove github owner/repo` · `oculus-clone --dir ~/Dev/source github owner/repo` · `oculus-clone --check --dir ~/Dev/source github owner/repo` |
 
 To get from a page to the panel in one key press, bind the IPC call to a key
 in Hyprland:

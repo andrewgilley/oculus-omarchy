@@ -21,7 +21,7 @@ vim.opt.rtp:append(oculus)
 
 local track = require("oculus_omarchy.track")
 local args = { unpack(arg) }
-local file, group, move, name, remove = nil, nil, nil, nil, false
+local file, group, move, name, path, remove = nil, nil, nil, nil, nil, false
 
 local function fail(message)
   io.stderr:write(message .. "\n")
@@ -33,11 +33,13 @@ while args[1] and args[1]:sub(1, 2) == "--" do
 
   if flag == "--remove" then
     remove = true
-  elseif flag == "--file" or flag == "--group" or flag == "--move" or flag == "--name" then
+  elseif flag == "--file" or flag == "--group" or flag == "--move" or flag == "--name" or flag == "--path" then
     local value = table.remove(args, 1) or fail(flag .. " needs a value")
 
     if flag == "--file" then
       file = value
+    elseif flag == "--path" then
+      path = value
     elseif flag == "--name" then
       name = vim.trim(value) ~= "" and vim.trim(value) or nil
     else
@@ -52,11 +54,11 @@ end
 local ok, message
 
 if remove then
-  ok, message = track.remove(args[1], args[2], file)
+  ok, message = track.remove(args[1], args[2], file, path)
 elseif move then
-  ok, message = track.move(args[1], args[2], move, file)
+  ok, message = track.move(args[1], args[2], move, file, path)
 else
-  ok, message = track.add(args[1], args[2], file, group, name)
+  ok, message = track.add(args[1], args[2], file, group, name, path)
 end
 
 if not ok then

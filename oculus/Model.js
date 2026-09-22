@@ -79,7 +79,11 @@ function parseUrl(text) {
   var section = (parts[2] || "").toLowerCase()
   var id = parts[3] || ""
 
-  if ((section === "pull" || section === "pulls") && /^\d+$/.test(id)) {
+  if (provider === "github" && section === "tree" && id && parts.length > 4
+      && parts.slice(4).every(function(part) { return NAME.test(part) && part !== "." && part !== ".." })) {
+    item.kind = "directory"
+    item.path = parts.slice(4).join("/")
+  } else if ((section === "pull" || section === "pulls") && /^\d+$/.test(id)) {
     item.kind = "pull_request"
     item.number = Number(id)
   } else if (section === "issues" && /^\d+$/.test(id)) {
@@ -90,12 +94,14 @@ function parseUrl(text) {
     item.sha = id.toLowerCase()
   }
 
-  item.url = host + item.repository + (item.kind === "project" ? "" : "/" + parts[2] + "/" + id)
+  item.url = host + item.repository + (item.kind === "project" ? "" : item.kind === "directory"
+    ? "/" + parts.slice(2).join("/") : "/" + parts[2] + "/" + id)
   return item
 }
 
-function projectKey(provider, repository) {
+function projectKey(provider, repository, path) {
   return (provider === "codeberg" ? "codeberg" : "github") + ":" + String(repository).toLowerCase()
+    + (path ? "/" + String(path).toLowerCase() : "")
 }
 
 function userKey(provider, username) {
@@ -103,7 +109,7 @@ function userKey(provider, username) {
 }
 
 // Arguments for oculus-open / oculus-track.
-function projectTarget(item) { return item.provider + ":" + item.repository }
+function projectTarget(item) { return item.provider + ":" + item.repository + (item.path ? "/" + item.path : "") }
 function userTarget(item) { return item.provider + ":" + item.owner }
 
 function describe(item) {
@@ -111,6 +117,7 @@ function describe(item) {
   switch (item.kind) {
     case "user": return "@" + item.owner
     case "project": return item.repository
+    case "directory": return item.repository + "/" + item.path
     case "pull_request": return "Pull request · " + item.repository + "#" + item.number
     case "issue": return "Issue · " + item.repository + "#" + item.number
     case "commit": return "Commit · " + item.repository + "@" + item.sha.slice(0, 7)
@@ -148,7 +155,7 @@ function parseTracking(text) {
   flatten(data.users, [], tracking.users, tracking.groups.users)
   tracking.projects = tracking.projects.filter(function(p) { return typeof p.repository === "string" })
   tracking.users = tracking.users.filter(function(u) { return typeof u.username === "string" })
-  tracking.projects.forEach(function(p) { tracking.keys[projectKey(p.provider, p.repository)] = true })
+  tracking.projects.forEach(function(p) { tracking.keys[projectKey(p.provider, p.repository, p.path)] = true })
   tracking.users.forEach(function(u) { tracking.keys[userKey(u.provider, u.username)] = true })
   tracking.ok = true
   return tracking
@@ -160,7 +167,7 @@ function isTracked(item, tracking) {
   if (!item) return false
   return item.kind === "user"
     ? tracking.keys[userKey(item.provider, item.owner)] === true
-    : tracking.keys[projectKey(item.provider, item.repository)] === true
+    : tracking.keys[projectKey(item.provider, item.repository, item.path)] === true
 }
 
 // Short at-a-glance state for the panel hero.
@@ -195,6 +202,7 @@ function actionsFor(item, tracking, clone) {
   if (!item) return []
   var actions = []
   var trackedRepo = item.repository && tracking.keys[projectKey(item.provider, item.repository)] === true
+  var trackedDirectory = item.path && tracking.keys[projectKey(item.provider, item.repository, item.path)] === true
   var trackedUser = tracking.keys[userKey(item.provider, item.owner)] === true
   var owner = "@" + item.owner
 
@@ -203,10 +211,13 @@ function actionsFor(item, tracking, clone) {
   }
 
   if (item.kind !== "user") {
+    if (item.kind === "directory") actions.push(trackedDirectory
+      ? { id: "trackDirectory", label: "Tracking " + item.path, hint: "already in your tracking file", done: true }
+      : { id: "trackDirectory", label: "Track " + item.path, hint: "choose a group and name" })
     actions.push(trackedRepo
       ? { id: "trackProject", label: "Tracking " + item.repository, hint: "already in your tracking file", done: true }
       : { id: "trackProject", label: "Track " + item.repository, hint: "choose a group and name" })
-    actions.push({ id: "project", label: "Open " + item.repository + " activity", hint: "in Oculus" })
+    actions.push({ id: "project", label: "Open " + (item.path || item.repository) + " activity", hint: "in Oculus" })
     if (clone) actions.push(cloneAction(item, clone))
   }
 
@@ -246,7 +257,7 @@ function remoteCommand(server, exCommand) {
 
 // ---- Overlay: search tracked projects and users, the current page, a URL -------
 var ICONS = {
-  project: "\uf401", user: "\uf007", pull_request: "\uf407", issue: "\uf41b",
+  project: "\uf401", directory: "\uf07b", user: "\uf007", pull_request: "\uf407", issue: "\uf41b",
   commit: "\uf417", group: "\uf07b", newGroup: "\uf067",
 }
 
@@ -263,7 +274,7 @@ function trackedItem(list, node) {
   var provider = node.provider === "codeberg" ? "codeberg" : "github"
   if (list === "users") return { kind: "user", provider: provider, owner: node.username, url: forgeUrl(provider, node.username) }
   var parts = node.repository.split("/")
-  return { kind: "project", provider: provider, owner: parts[0], repo: parts[1], repository: node.repository,
+  return { kind: node.path ? "directory" : "project", provider: provider, owner: parts[0], repo: parts[1], repository: node.repository, path: node.path,
     url: forgeUrl(provider, node.repository) }
 }
 
@@ -309,9 +320,9 @@ function paletteRows(tracking, pageItem, query) {
       var score = matchScore([label, name, node.group.join(" "), item.provider].join(" "), label, query)
       if (score === 0) return
       scored.push({ score: score, index: index, row: {
-        key: list + ":" + item.provider + ":" + identity.toLowerCase(), section: list === "users" ? "Users" : "Projects",
+        key: list + ":" + item.provider + ":" + identity.toLowerCase() + (node.path ? "/" + node.path.toLowerCase() : ""), section: list === "users" ? "Users" : "Projects",
         kind: "tracked", icon: ICONS[item.kind], label: label, detail: detail, item: item,
-        list: list, identity: identity, group: node.group } })
+        list: list, identity: identity, path: node.path, group: node.group } })
     })
     scored.sort(function(a, b) { return b.score - a.score || a.index - b.index })
     scored.forEach(function(entry) { rows.push(entry.row) })
@@ -327,14 +338,14 @@ function rowActions(row, tracking) {
   if (row.kind === "tracked") {
     return [
       { id: item.kind === "user" ? "user" : "project", label: "Open activity", hint: "in Oculus" },
-      { id: "browser", label: "Open on " + forgeName(item.provider), hint: item.url },
+      { id: "browser", label: "Open " + (item.path ? "repository on " : "on ") + forgeName(item.provider), hint: item.url },
       { id: "move", label: "Move to a group\u2026", hint: "now in " + groupLabel(row.group) },
       { id: "untrack", label: "Untrack", hint: "remove from your tracking file" },
     ]
   }
   var actions = actionsFor(item, tracking).map(function(action) {
     var copy = { id: action.id, label: action.label, hint: action.hint, done: action.done === true }
-    if (!copy.done && (copy.id === "trackProject" || copy.id === "trackUser")) copy.hint = "choose a group and name next"
+    if (!copy.done && (copy.id === "trackProject" || copy.id === "trackDirectory" || copy.id === "trackUser")) copy.hint = "choose a group and name next"
     return copy
   })
   if (row.kind === "link") actions.push({ id: "browser", label: "Open on " + forgeName(item.provider), hint: item.url })
