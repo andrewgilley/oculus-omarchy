@@ -106,10 +106,11 @@ Panel {
     close()
   }
 
-  function startPick(list, identity, label) {
+  function startPick(list, identity, label, suggestedName) {
     if (tracker.running) return
     lastError = ""
-    pick = { list: list, provider: item.provider, identity: identity, label: label, step: "group", path: [] }
+    pick = { list: list, provider: item.provider, identity: identity, label: label,
+      suggestedName: suggestedName || "", step: "group", path: [] }
     pickField.text = ""
     pickIndex = 0
     Qt.callLater(function() { pickField.forceActiveFocus() })
@@ -136,7 +137,7 @@ Panel {
     if (!pick || !row) return
     if (pick.step === "group") {
       pick = Object.assign({}, pick, { step: "name", path: row.path })
-      pickField.text = ""
+      pickField.text = pick.suggestedName
       pickIndex = 0
       return
     }
@@ -161,7 +162,7 @@ Panel {
       case "project": launch("project", Model.projectTarget(item)); break
       case "user": launch("user", Model.userTarget(item)); break
       case "clone": startClone(); break
-      case "trackProject": startPick("projects", item.repository, item.repository); break
+      case "trackProject": startPick("projects", item.repository, item.repository, item.repo); break
       case "trackDirectory":
         startPick("projects", item.repository, item.repository + "/" + item.path)
         pick = Object.assign({}, pick, { directoryPath: item.path })
