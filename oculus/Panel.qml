@@ -20,6 +20,7 @@ import "Model.js" as Model
 //   oculus-open  <inspect|project|user|oculus> [target]   new Ghostty + Neovim
 //   oculus-track [--group G] [--name N] <github|codeberg> <owner/repo|login>
 //   oculus-clone [--check] --dir DIR <github|codeberg> <owner/repo>
+//   oculus-save  [--file STATE] <url> | --remove <key>...
 //
 // Tracking asks, in the panel, which group to put the entry in and what to call it.
 Panel {
@@ -33,10 +34,13 @@ Panel {
   readonly property string trackingPath: setting("trackingFile", "") || ((Quickshell.env("XDG_CONFIG_HOME") || (home + "/.config")) + "/oculus/tracking.json")
   readonly property string binDir: home + "/.local/bin"
   readonly property string sourceDir: setting("sourceDir", "") || (home + "/Dev/source")
+  // oculus.nvim's state_file, which holds its saved items.
+  readonly property string savedPath: setting("stateFile", "") || ((Quickshell.env("XDG_STATE_HOME") || (home + "/.local/state")) + "/nvim/oculus.json")
   readonly property int staleAfterSec: setting("staleAfterSec", 60)
 
   property string snapshotText: ""
   property string trackingText: ""
+  property string savedText: ""
   property string browserText: ""
   // Whether the browser that wrote browser.json is still running; checked on open.
   property bool browserAlive: true
@@ -48,6 +52,7 @@ Panel {
   // was asked about, so a reply that lands after the page changed is ignored.
   property var cloneState: null
   property string cloneStatus: ""
+  property string saveStatus: ""
   // Set while a Track row asks where the entry goes and what to call it:
   // { list, provider, identity, label, step: group | name, path }.
   property var pick: null
@@ -65,7 +70,8 @@ Panel {
   // The check's answer, but only while it still describes the page's project.
   readonly property var clone: item && item.kind !== "user" && cloneState
     && cloneState.target === Model.projectTarget(item) ? cloneState : null
-  readonly property var actions: Model.actionsFor(item, tracking, clone)
+  readonly property var saved: Model.parseSaved(savedText)
+  readonly property var actions: Model.actionsFor(item, tracking, clone, Model.savedKeys(item, saved))
   // "Tracked" / "Not tracked" for the hero pill; "" when there's nothing to act on.
   readonly property string trackedLabel: Model.trackedLabel(item, tracking)
   // What's stopping Oculus from reading the page, for the hero; "" otherwise.
@@ -99,6 +105,17 @@ Panel {
     cloneStatus = "Cloning " + item.repository + " into " + shorten(sourceDir) + "\u2026"
     cloner.command = [binDir + "/oculus-clone", "--dir", sourceDir, item.provider, item.repository]
     cloner.running = true
+  }
+
+  // Save the page's pull request, issue or commit to Oculus, or unsave it. The
+  // row follows the state file, which the panel watches, once oculus-save writes it.
+  function toggleSave(action) {
+    if (saver.running || !item) return
+    lastError = ""
+    saveStatus = (action.id === "save" ? "Saving " : "Unsaving ") + Model.describe(item) + "\u2026"
+    saver.command = [binDir + "/oculus-save", "--file", savedPath]
+      .concat(action.id === "save" ? [item.url] : ["--remove"].concat(action.keys))
+    saver.running = true
   }
 
   function launch(action, target) {
@@ -162,6 +179,7 @@ Panel {
       case "project": launch("project", Model.projectTarget(item)); break
       case "user": launch("user", Model.userTarget(item)); break
       case "clone": startClone(); break
+      case "save": case "unsave": toggleSave(action); break
       case "trackProject": startPick("projects", item.repository, item.repository, item.repo); break
       case "trackDirectory":
         startPick("projects", item.repository, item.repository + "/" + item.path)
@@ -210,6 +228,7 @@ Panel {
       pinnedText = ""
       lastError = ""
       if (!cloner.running) cloneStatus = ""
+      if (!saver.running) saveStatus = ""
     }
   }
 
@@ -273,6 +292,26 @@ Panel {
         root.lastError = cloneErr.text.trim().split("\n").pop() || ("oculus-clone exited " + exitCode)
       }
       root.checkClone()
+    }
+  }
+
+  FileView {
+    path: root.savedPath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.savedText = text()
+    onLoadFailed: root.savedText = ""
+  }
+
+  Process {
+    id: saver
+    stdout: StdioCollector { id: saveOut }
+    stderr: StdioCollector { id: saveErr }
+    onExited: function(exitCode) {
+      var out = saveOut.text.trim()
+      root.saveStatus = exitCode === 0 && out !== "" ? out.charAt(0).toUpperCase() + out.slice(1) : ""
+      if (exitCode !== 0) root.lastError = saveErr.text.trim().split("\n").pop() || ("oculus-save exited " + exitCode)
     }
   }
 
@@ -503,6 +542,7 @@ Panel {
               badge: modelData.badge || (modelData.done === true ? "\u2713" : modelData.key)
               dimmed: modelData.done === true || (tracker.running && modelData.id.indexOf("track") === 0)
                 || (cloner.running && modelData.id === "clone")
+                || (saver.running && (modelData.id === "save" || modelData.id === "unsave"))
               onActivated: root.run(modelData)
             }
           }
@@ -561,6 +601,7 @@ Panel {
             font.family: root.fontFamily
             font.pixelSize: Style.font.body * 0.85
             text: root.lastError !== "" ? root.lastError
+              : root.saveStatus !== "" ? root.saveStatus
               : root.cloneStatus !== "" ? root.cloneStatus
               : !root.tracking.ok && root.item !== null
               ? "No tracking file at " + root.trackingPath + ". Create it with {\"version\": 1, \"projects\": [], \"users\": []} to track from here."

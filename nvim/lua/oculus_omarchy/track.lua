@@ -7,6 +7,7 @@
 -- published its socket in omarchy.json is then asked to reload, so its Oculus
 -- window picks the change up.
 
+local remote = require("oculus_omarchy.remote")
 local M = {}
 
 local config_home = vim.env.XDG_CONFIG_HOME or (vim.env.HOME .. "/.config")
@@ -16,18 +17,6 @@ M.config = {
   tracking_file = config_home .. "/oculus/tracking.json",
   snapshot_file = state_home .. "/oculus/omarchy.json",
 }
-
-local function read_json(file)
-  local handle = io.open(file, "rb")
-
-  if not handle then
-    return nil
-  end
-
-  local ok, data = pcall(vim.json.decode, handle:read("*a"))
-  handle:close()
-  return ok and type(data) == "table" and data or nil
-end
 
 local function matches(node, provider, field, value, path)
   return type(node[field]) == "string"
@@ -105,25 +94,13 @@ function M.parse_group(text)
   return vim.split(text, "/", { trimempty = true })
 end
 
--- Best effort: a missing or stale socket just means nothing to reload.
 local function reload_running_neovim()
-  local snapshot = read_json(M.config.snapshot_file)
-
-  if not snapshot or snapshot.running ~= true or type(snapshot.server) ~= "string" then
-    return
-  end
-
-  local ok, channel = pcall(vim.fn.sockconnect, "pipe", snapshot.server, { rpc = true })
-
-  if ok and channel > 0 then
-    pcall(vim.rpcrequest, channel, "nvim_exec_lua", [[
-      local ok, oculus = pcall(require, "oculus")
-      if ok and oculus.config and oculus.config.tracking_file then
-        oculus.reload_tracking()
-      end
-    ]], {})
-    vim.fn.chanclose(channel)
-  end
+  remote.exec([[
+    local ok, oculus = pcall(require, "oculus")
+    if ok and oculus.config and oculus.config.tracking_file then
+      oculus.reload_tracking()
+    end
+  ]], M.config.snapshot_file)
 end
 
 -- Load the tracking file, apply edit(tree, list, field, label), save and tell

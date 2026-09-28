@@ -177,6 +177,61 @@ function trackedLabel(item, tracking) {
   return isTracked(item, tracking) ? "Tracked" : "Not tracked"
 }
 
+// ---- Saved items (saved_items in oculus.nvim's state file) --------------------
+// [{ key, saved_at, source: { kind, provider, ... }, event }]. Each comes back as
+// { key, provider, repository, kind, number | sha }, where kind is what the
+// entry is: pull_request, issue or commit, or "" for anything else (a comment,
+// a review, a push of several commits), which never matches a page.
+function parseSaved(text) {
+  var data = decode(text)
+  var entries = data && data.saved_items instanceof Array ? data.saved_items : []
+  var saved = []
+  entries.forEach(function(entry) {
+    var event = entry && typeof entry.key === "string" ? entry.event : null
+    var repository = event && event.repo && (event.repo.name || event.repo.full_name)
+    if (!event || typeof repository !== "string") return
+    var payload = event.payload || {}
+    var row = { key: entry.key, provider: entry.source && entry.source.provider === "codeberg" ? "codeberg" : "github",
+      repository: repository.toLowerCase(), kind: "" }
+    if (event.type === "PullRequestEvent") {
+      row.kind = "pull_request"
+      row.number = Number((payload.pull_request && payload.pull_request.number) || payload.number)
+    } else if (event.type === "IssuesEvent" && payload.issue) {
+      // Project feeds list pull requests among the issues.
+      row.kind = payload.issue.pull_request ? "pull_request" : "issue"
+      row.number = Number(payload.issue.number)
+    } else if (event.type === "PushEvent") {
+      var commits = payload.commits instanceof Array ? payload.commits : []
+      if (Number(payload.size || commits.length) <= 1) {
+        row.kind = "commit"
+        row.sha = String((commits[0] && commits[0].sha) || payload.head || "").toLowerCase()
+      }
+    }
+    saved.push(row)
+  })
+  return saved
+}
+
+// Keys of the saved entries that are this page's pull request, issue or commit.
+function savedKeys(item, saved) {
+  if (!item || ["pull_request", "issue", "commit"].indexOf(item.kind) < 0) return []
+  var repository = item.repository.toLowerCase()
+  return saved.filter(function(row) {
+    if (row.kind !== item.kind || row.provider !== item.provider || row.repository !== repository) return false
+    return item.kind === "commit" ? row.sha !== "" && row.sha.indexOf(item.sha) === 0 : row.number === item.number
+  }).map(function(row) { return row.key })
+}
+
+// The save row toggles, like S in Oculus: save the item, or once it's saved,
+// unsave every entry that is it.
+function saveAction(item, keys) {
+  var noun = item.kind === "commit" ? "commit " + item.sha.slice(0, 7)
+    : (item.kind === "issue" ? "issue #" : "pull request #") + item.number
+  return keys.length > 0
+    ? { id: "unsave", label: "Saved " + noun, hint: "in your Oculus saved items \u00b7 press to unsave", keys: keys }
+    : { id: "save", label: "Save " + noun, hint: "to your Oculus saved items" }
+}
+
 // The clone row: offer to clone the project into the source folder, or say what
 // that folder already holds. `clone` is { state, path } from `oculus-clone
 // --check`, with `path` shortened for display.
@@ -197,8 +252,10 @@ function cloneAction(item, clone) {
 // the tracking file are dimmed, badged and do nothing. `key` is the digit that
 // runs the row; `done` rows have none, so the numbering stays 1..n over the
 // rows you can actually press. `clone` adds the clone row when the source
-// folder has been looked at; leave it out and there is none.
-function actionsFor(item, tracking, clone) {
+// folder has been looked at; leave it out and there is none. `saved` is the
+// keys from savedKeys; leave it out and a pull request, issue or commit page
+// has no save row.
+function actionsFor(item, tracking, clone, saved) {
   if (!item) return []
   var actions = []
   var trackedRepo = item.repository && tracking.keys[projectKey(item.provider, item.repository)] === true
@@ -208,6 +265,7 @@ function actionsFor(item, tracking, clone) {
 
   if (item.kind === "pull_request" || item.kind === "issue" || item.kind === "commit") {
     actions.push({ id: "inspect", label: "Inspect in Oculus", hint: describe(item) })
+    if (saved) actions.push(saveAction(item, saved))
   }
 
   if (item.kind !== "user") {

@@ -4,7 +4,8 @@ Omarchy shell plugin that takes the GitHub or Codeberg page you're looking at
 into [oculus.nvim](https://github.com/andrewgilley/oculus.nvim): it recognises
 the project or user the page is about, tells you whether Oculus already tracks
 it and whether you have it cloned, and offers to track it, clone it, open its
-activity feed, or inspect a pull request, issue or commit.
+activity feed, or inspect a pull request, issue or commit and add it to your
+saved items.
 
 The bar icon and the panel's hero mark are the `assets/omarchy-plugin-icon.svg`
 path drawn with `QtQuick.Shapes`, so they take the bar's foreground colour at
@@ -23,7 +24,7 @@ the page you're on with nothing to copy. It recognises:
 |---------------------------------------------|----------------------------------------------------|
 | `github.com/owner/repo` (any page under it) | **track the project** · open its activity · **clone it** · **track the owner** · open the owner's activity |
 | `github.com/owner/repo/tree/branch/path/to/dir` | **track the directory** separately, plus the repository and owner actions |
-| `github.com/owner/repo/pull/N`, `/issues/N`, `/commit/SHA` | **inspect** in Oculus, plus everything above |
+| `github.com/owner/repo/pull/N`, `/issues/N`, `/commit/SHA` | **inspect** in Oculus · **save** it to your saved items, plus everything above |
 | `github.com/login`, `github.com/orgs/login` | **track the user** · open their activity           |
 
 Codeberg URLs work the same (`codeberg.org/owner/repo/pulls/N`). Forge pages
@@ -54,6 +55,14 @@ the panel says so instead of offering actions.
   If it isn't there, **Clone** fetches it into that folder with `git clone`.
   The clone runs in the background — close the panel and it carries on, and a
   notification says when it lands.
+- **Saving** a pull request, issue or commit is one press, and the row says
+  when it's already in your saved items; press it again to unsave, like `S`
+  in Oculus. The item is fetched from its forge (with the token Oculus uses)
+  and stored as the same activity event Oculus's project feeds show for it,
+  so it lists, stars and opens there like anything saved from a feed. If the
+  forge can't be reached, the panel shows why and nothing is saved. A running
+  Neovim is told to reload its saved items, so its next write keeps the new
+  one; a saved list already on screen shows it when next drawn.
 - **Tracking** asks in the panel which group to put the entry in (type to
   filter, or type a new group's name) and then what to call it (Enter twice
   keeps the top level and no name). It goes through
@@ -99,7 +108,7 @@ the panel says so instead of offering actions.
 
    This validates the plugin, copies it to
    `~/.config/omarchy/plugins/andrewgilley.oculus/`, and links `oculus-open`,
-   `oculus-track` and `oculus-clone` into `~/.local/bin`. It registers
+   `oculus-track`, `oculus-clone` and `oculus-save` into `~/.local/bin`. It registers
    `oculus-page-host` as a native messaging host and adds `browser/oculus-page`
    to the `--load-extension` line of your browser's flags file, the way Omarchy loads
    its own extensions. It also removes the links left by 0.2
@@ -109,10 +118,12 @@ the panel says so instead of offering actions.
 
 After a lazy.nvim update, run `install.sh` again to pick up widget changes.
 
-`oculus-track` finds oculus.nvim at `~/.local/share/nvim/lazy/oculus.nvim`;
-override with `OCULUS_NVIM_PATH`. If your `tracking_file` isn't
-`~/.config/oculus/tracking.json`, set the widget's *Tracking file* setting, and
-if your clones don't live in `~/Dev/source`, set *Source folder*.
+`oculus-track` and `oculus-save` find oculus.nvim at
+`~/.local/share/nvim/lazy/oculus.nvim`; override with `OCULUS_NVIM_PATH`. If
+your `tracking_file` isn't `~/.config/oculus/tracking.json`, set the widget's
+*Tracking file* setting; if your `state_file` isn't
+`~/.local/state/nvim/oculus.json`, set *Oculus state file*; and if your clones
+don't live in `~/Dev/source`, set *Source folder*.
 
 ### Working on a local checkout
 
@@ -163,8 +174,9 @@ starting query: `omarchy-shell shell summon andrewgilley.oculus '{"query": "zig"
 | Panel keys | `1`–`n` run an action · Enter runs the first · `o` open Oculus · `q` or Esc close |
 | Overlay keys | type to search · ↑↓ select · Enter runs the first action · Tab into the actions · Alt+Enter open in browser · Del untrack · Ctrl+V paste · Esc clear, back, close |
 | Tracked    | dimmed row, ✓ instead of a number — it's already in the tracking file, or already cloned |
+| Saved      | the save row reads *Saved …* and keeps its number — press it to unsave |
 | IPC        | `omarchy-shell andrewgilley.oculus toggle` opens the panel on the current page; `item <url>` on any URL; `status` · `omarchy-shell shell toggle andrewgilley.oculus '{}'` the overlay |
-| CLI        | `oculus-open inspect <url>` · `oculus-open project github:owner/repo[/directory]` · `oculus-open user github:login` · `oculus-track github owner/repo` · `oculus-track --path crates/gpui github zed-industries/zed` · `oculus-track codeberg login` · `oculus-track --group /Editors/ --name Name github owner/repo` · `oculus-track --move / github owner/repo` · `oculus-track --remove github owner/repo` · `oculus-clone --dir ~/Dev/source github owner/repo` · `oculus-clone --check --dir ~/Dev/source github owner/repo` |
+| CLI        | `oculus-open inspect <url>` · `oculus-open project github:owner/repo[/directory]` · `oculus-open user github:login` · `oculus-track github owner/repo` · `oculus-track --path crates/gpui github zed-industries/zed` · `oculus-track codeberg login` · `oculus-track --group /Editors/ --name Name github owner/repo` · `oculus-track --move / github owner/repo` · `oculus-track --remove github owner/repo` · `oculus-clone --dir ~/Dev/source github owner/repo` · `oculus-clone --check --dir ~/Dev/source github owner/repo` · `oculus-save <pull/issue/commit url>` · `oculus-save --remove <key>` |
 
 To get from a page to the panel in one key press, bind the IPC call to a key
 in Hyprland:
@@ -190,6 +202,9 @@ o.bind("SUPER + ALT + O", "Oculus: act on this page",
   `oculus-clone --dir ~/Dev/source github owner/repo` in a terminal to see the
   whole of what git said; `--check` prints `<state>\t<path>` for the folder it
   would use.
+- Save errors show in the panel too; `oculus-save <url>` in a terminal does
+  the same thing. `jq '.saved_items[].key' ~/.local/state/nvim/oculus.json`
+  lists what's saved.
 - Bridge: `jq . ~/.local/state/oculus/omarchy.json`.
 - Browser page: `jq . ~/.local/state/oculus/browser.json` should change as you
   switch tabs. If the file never appears, check that `chrome://extensions`
