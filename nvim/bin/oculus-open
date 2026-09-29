@@ -16,24 +16,28 @@ usage() {
 
 action="${1:-}"
 target="${2:-}"
+commands=()
 
 # The target is passed to Neovim as an Ex command argument, so allow identity
 # and URL-path characters only.
 case "$action" in
   inspect)
-    [[ $target =~ ^https://(github\.com|codeberg\.org)/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/(pull|pulls|issues|commit)/[0-9A-Fa-f]+$ ]] || usage
-    command="OculusInspect $target"
+    [[ $target =~ ^https://(github\.com|codeberg\.org)/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/(pull|pulls|issues|commit)/[0-9A-Fa-f]+$ ]] || usage
+    host="${BASH_REMATCH[1]}"
+    repository="${BASH_REMATCH[2]}/${BASH_REMATCH[3]}"
+    provider="${host%%.*}"
+    commands=(-c "OculusOpen $provider:$repository" -c "OculusInspect $target")
     ;;
   project)
     [[ $target =~ ^github:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$|^codeberg:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || usage
-    command="OculusOpen $target"
+    commands=(-c "OculusOpen $target")
     ;;
   user)
     [[ $target =~ ^(github|codeberg):[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || usage
-    command="OculusOpen @$target"
+    commands=(-c "OculusOpen @$target")
     ;;
   oculus)
-    command="OculusOpen"
+    commands=(-c "OculusOpen")
     ;;
   *) usage ;;
 esac
@@ -43,4 +47,4 @@ hyprctl dispatch 'hl.dsp.focus({ workspace = "emptym" })' >/dev/null
 
 # Use -c, not +cmd: Ghostty's -e drops arguments that start with "+" (it
 # reserves them for its own +actions).
-exec omarchy-launch-tui --app-id=org.omarchy.oculus nvim -c "$command"
+exec omarchy-launch-tui --app-id=org.omarchy.oculus nvim "${commands[@]}"
