@@ -43,6 +43,8 @@ the panel says so instead of offering actions.
   tracking file reads *Tracking …*, is dimmed, and carries a ✓ instead of a
   number. The number keys only ever count the rows you can actually press, so
   `1`–`n` stay in step as things become tracked.
+- A project tracked inside an Oculus directory offers an action to open that
+  parent directory. Nested directories open at the project's own level.
 - On a GitHub directory page, tracking the directory saves its path from the
   repository root. The branch in the URL must be one path segment. The parent
   repository and other directories remain separate entries.

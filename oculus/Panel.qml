@@ -177,6 +177,7 @@ Panel {
     switch (action.id) {
       case "inspect": launch("inspect", item.url); break
       case "project": launch("project", Model.projectTarget(item)); break
+      case "parentDirectory": launch("directory", JSON.stringify(action.group)); break
       case "user": launch("user", Model.userTarget(item)); break
       case "clone": startClone(); break
       case "save": case "unsave": toggleSave(action); break

@@ -171,6 +171,7 @@ Item {
     switch (action.id) {
       case "inspect": root.launch("inspect", item.url); break
       case "project": root.launch("project", Model.projectTarget(item)); break
+      case "parentDirectory": root.launch("directory", JSON.stringify(action.group)); break
       case "user": root.launch("user", Model.userTarget(item)); break
       case "browser":
         Quickshell.execDetached(["xdg-open", item.url])

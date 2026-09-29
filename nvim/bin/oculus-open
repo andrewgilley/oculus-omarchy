@@ -5,12 +5,13 @@
 # Usage:
 #   oculus-open inspect <https://github.com/owner/repo/{pull,issues,commit}/ID>
 #   oculus-open project <github:owner/repo[/directory] | codeberg:owner/repo>
+#   oculus-open directory <JSON array of project group names>
 #   oculus-open user    <github:login | codeberg:login>
 #   oculus-open oculus
 set -euo pipefail
 
 usage() {
-  sed -n '5,9p' "$0" | sed 's/^# //' >&2
+  sed -n '5,10p' "$0" | sed 's/^# //' >&2
   exit 2
 }
 
@@ -31,6 +32,12 @@ case "$action" in
   project)
     [[ $target =~ ^github:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$|^codeberg:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || usage
     commands=(-c "OculusOpen $target")
+    ;;
+  directory)
+    [[ -n $target ]] || usage
+    export OCULUS_GROUP_PATH="$target"
+    export OCULUS_GROUP_HELPER="$(dirname "$(dirname "$(readlink -f "$0")")")/lua/oculus_omarchy/group.lua"
+    commands=(-c "OculusOpen" -c "lua dofile(vim.env.OCULUS_GROUP_HELPER).open()")
     ;;
   user)
     [[ $target =~ ^(github|codeberg):[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || usage

@@ -177,6 +177,22 @@ function trackedLabel(item, tracking) {
   return isTracked(item, tracking) ? "Tracked" : "Not tracked"
 }
 
+// The tracked project's parent group. On a repository directory page, use the
+// directory's own entry when tracked, otherwise the repository's entry.
+function projectGroup(item, tracking) {
+  if (!item || item.kind === "user") return null
+  var keys = [projectKey(item.provider, item.repository, item.path)]
+  if (item.path) keys.push(projectKey(item.provider, item.repository))
+  for (var i = 0; i < keys.length; i++) {
+    for (var j = 0; j < tracking.projects.length; j++) {
+      var project = tracking.projects[j]
+      if (projectKey(project.provider, project.repository, project.path) === keys[i])
+        return project.group && project.group.length > 0 ? project.group : null
+    }
+  }
+  return null
+}
+
 // ---- Saved items (saved_items in oculus.nvim's state file) --------------------
 // [{ key, saved_at, source: { kind, provider, ... }, event }]. Each comes back as
 // { key, provider, repository, kind, number | sha }, where kind is what the
@@ -261,6 +277,7 @@ function actionsFor(item, tracking, clone, saved) {
   var trackedRepo = item.repository && tracking.keys[projectKey(item.provider, item.repository)] === true
   var trackedDirectory = item.path && tracking.keys[projectKey(item.provider, item.repository, item.path)] === true
   var trackedUser = tracking.keys[userKey(item.provider, item.owner)] === true
+  var group = projectGroup(item, tracking)
   var owner = "@" + item.owner
 
   if (item.kind === "pull_request" || item.kind === "issue" || item.kind === "commit") {
@@ -276,6 +293,8 @@ function actionsFor(item, tracking, clone, saved) {
       ? { id: "trackProject", label: "Tracking " + item.repository, hint: "already in your tracking file", done: true }
       : { id: "trackProject", label: "Track " + item.repository, hint: "choose a group and name" })
     actions.push({ id: "project", label: "Open " + (item.path || item.repository) + " activity", hint: "in Oculus" })
+    if (group) actions.push({ id: "parentDirectory", label: "Open " + group[group.length - 1] + " directory",
+      hint: groupLabel(group) + " in Oculus", group: group })
     if (clone) actions.push(cloneAction(item, clone))
   }
 
@@ -402,7 +421,8 @@ function rowActions(row, tracking) {
     ]
   }
   var actions = actionsFor(item, tracking).map(function(action) {
-    var copy = { id: action.id, label: action.label, hint: action.hint, done: action.done === true }
+    var copy = { id: action.id, label: action.label, hint: action.hint, done: action.done === true,
+      group: action.group }
     if (!copy.done && (copy.id === "trackProject" || copy.id === "trackDirectory" || copy.id === "trackUser")) copy.hint = "choose a group and name next"
     return copy
   })
