@@ -10,14 +10,11 @@
 -- GROUP is a path of group names, "/Editors/Plugins/" ("/" is the top level),
 -- or a JSON array of names. Missing groups are created. NAME is the display name
 -- Oculus shows for the new entry.
+-- --snapshot PATH selects the bridge snapshot for a widget's custom state folder.
 
 local script = vim.uv.fs_realpath(arg[0]) or arg[0]
 local root = vim.fn.fnamemodify(script, ":h:h")
-local oculus = vim.env.OCULUS_NVIM_PATH
-  or (vim.fn.stdpath("data") .. "/lazy/oculus.nvim")
-
 vim.opt.rtp:append(root)
-vim.opt.rtp:append(oculus)
 
 local track = require("oculus_omarchy.track")
 local args = { unpack(arg) }
@@ -33,10 +30,12 @@ while args[1] and args[1]:sub(1, 2) == "--" do
 
   if flag == "--remove" then
     remove = true
-  elseif flag == "--file" or flag == "--group" or flag == "--move" or flag == "--name" or flag == "--path" then
+  elseif flag == "--snapshot" or flag == "--file" or flag == "--group" or flag == "--move" or flag == "--name" or flag == "--path" then
     local value = table.remove(args, 1) or fail(flag .. " needs a value")
 
-    if flag == "--file" then
+    if flag == "--snapshot" then
+      track.config.snapshot_file = value
+    elseif flag == "--file" then
       file = value
     elseif flag == "--path" then
       path = value
@@ -52,6 +51,7 @@ while args[1] and args[1]:sub(1, 2) == "--" do
 end
 
 local ok, message
+require("oculus_omarchy.runtime").setup(track.config.snapshot_file)
 
 if remove then
   ok, message = track.remove(args[1], args[2], file, path)

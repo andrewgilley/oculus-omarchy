@@ -94,13 +94,15 @@ function M.parse_group(text)
   return vim.split(text, "/", { trimempty = true })
 end
 
-local function reload_running_neovim()
+local function reload_running_neovim(file)
   remote.exec([[
+    local file = ...
     local ok, oculus = pcall(require, "oculus")
-    if ok and oculus.config and oculus.config.tracking_file then
+    if ok and oculus.config and oculus.config.tracking_file
+      and vim.fn.fnamemodify(vim.fn.expand(oculus.config.tracking_file), ":p") == file then
       oculus.reload_tracking()
     end
-  ]], M.config.snapshot_file)
+  ]], M.config.snapshot_file, { file })
 end
 
 -- Load the tracking file, apply edit(tree, list, field, label), save and tell
@@ -149,7 +151,7 @@ local function edit(provider, identity, file, path, fn)
     return false, save_err
   end
 
-  reload_running_neovim()
+  reload_running_neovim(config._tracking.path)
   return true, message
 end
 

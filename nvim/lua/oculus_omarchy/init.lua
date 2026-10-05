@@ -6,7 +6,7 @@
 local M = {}
 
 M.config = {
-  path = vim.fn.stdpath("state"):gsub("/nvim$", "") .. "/oculus/omarchy.json",
+  path = (vim.env.XDG_STATE_HOME or (vim.env.HOME .. "/.local/state")) .. "/oculus/omarchy.json",
   interval_ms = 30000,
 }
 
@@ -26,10 +26,11 @@ local function write(payload)
 end
 
 function M.publish()
-  write({ running = true, server = vim.v.servername })
+  write({ running = true, server = vim.v.servername, oculus_path = require("oculus_omarchy.runtime").path() })
 end
 
 function M.setup(opts)
+  if vim.env.OCULUS_OMARCHY_PROBE == "1" then return end
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
 
   -- The widget needs a socket to send commands back.
@@ -57,7 +58,7 @@ function M.setup(opts)
         timer:stop()
       end
 
-      write({ running = false })
+      write({ running = false, oculus_path = require("oculus_omarchy.runtime").path() })
     end,
   })
 end

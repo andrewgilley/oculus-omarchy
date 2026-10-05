@@ -160,7 +160,7 @@ Panel {
     }
     var target = pick
     endPick()
-    tracker.command = [binDir + "/oculus-track", "--file", trackingPath, "--group", JSON.stringify(target.path)]
+    tracker.command = [binDir + "/oculus-track", "--snapshot", stateDir + "/omarchy.json", "--file", trackingPath, "--group", JSON.stringify(target.path)]
       .concat(row.name ? ["--name", row.name] : [], target.directoryPath ? ["--path", target.directoryPath] : [], [target.provider, target.identity])
     tracker.running = true
   }

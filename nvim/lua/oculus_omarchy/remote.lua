@@ -8,7 +8,8 @@ local state_home = vim.env.XDG_STATE_HOME or (vim.env.HOME .. "/.local/state")
 
 M.snapshot_file = state_home .. "/oculus/omarchy.json"
 
-local function read_json(file)
+function M.read(file)
+  file = file or M.snapshot_file
   local handle = io.open(file, "rb")
 
   if not handle then
@@ -20,8 +21,8 @@ local function read_json(file)
   return ok and type(data) == "table" and data or nil
 end
 
-function M.exec(code, snapshot_file)
-  local snapshot = read_json(snapshot_file or M.snapshot_file)
+function M.exec(code, snapshot_file, args)
+  local snapshot = M.read(snapshot_file)
 
   if not snapshot or snapshot.running ~= true or type(snapshot.server) ~= "string" then
     return
@@ -30,7 +31,7 @@ function M.exec(code, snapshot_file)
   local ok, channel = pcall(vim.fn.sockconnect, "pipe", snapshot.server, { rpc = true })
 
   if ok and channel > 0 then
-    pcall(vim.rpcrequest, channel, "nvim_exec_lua", code, {})
+    pcall(vim.rpcrequest, channel, "nvim_exec_lua", code, args or {})
     vim.fn.chanclose(channel)
   end
 end

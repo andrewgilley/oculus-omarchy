@@ -69,8 +69,9 @@ the panel says so instead of offering actions.
   filter, or type a new group's name) and then what to call it (Enter twice
   keeps the top level and no name). It goes through
   oculus.nvim's own `oculus.tracking` module (the same validation and atomic
-  write the Oculus UI uses) and works with no Neovim open. If a Neovim running the bridge is up,
-  it's told to reload the tracking file over RPC.
+  write the Oculus UI uses) and works with no Neovim open. If a Neovim running
+  the bridge is up, it's told to reload that same tracking file over RPC,
+  updating Oculus's project list immediately.
 - The panel only ever talks about the page you're on. Browse the things you
   already track in Oculus itself (`o`, or middle-click the bar icon).
 - Inspect and open start a new Ghostty + Neovim on an empty workspace
@@ -120,8 +121,11 @@ the panel says so instead of offering actions.
 
 After a lazy.nvim update, run `install.sh` again to pick up widget changes.
 
-`oculus-track` and `oculus-save` find oculus.nvim at
-`~/.local/share/nvim/lazy/oculus.nvim`; override with `OCULUS_NVIM_PATH`. If
+`oculus-track` finds oculus.nvim through the bridge, the usual lazy.nvim install,
+or your configured Neovim (including a local `dir` checkout). The bridge shares
+`$XDG_STATE_HOME/oculus/omarchy.json` with the widget even with a custom
+`NVIM_APPNAME`. `oculus-save` uses the usual lazy.nvim install; override either
+helper's plugin path with `OCULUS_NVIM_PATH`. If
 your `tracking_file` isn't `~/.config/oculus/tracking.json`, set the widget's
 *Tracking file* setting; if your `state_file` isn't
 `~/.local/state/nvim/oculus.json`, set *Oculus state file*; and if your clones
@@ -191,6 +195,8 @@ o.bind("SUPER + ALT + O", "Oculus: act on this page",
 
 ## Debugging
 
+- Tracking integration test (uses temporary files and an isolated Neovim):
+  `OCULUS_NVIM_PATH=/path/to/oculus.nvim nvim -l tests/tracking.lua`.
 - Plugin load errors: `qs log -i "$(qs list | awk '/^Instance/{print $2}' | tr -d :)" | grep oculus`.
   A failed reload keeps the *old* widget running, so check this first if
   changes don't show up. If the error still names a line you've already fixed,
